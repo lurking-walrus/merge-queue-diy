@@ -95,6 +95,12 @@ and returns in milliseconds.
 4. executes the returned actions, each idempotent;
 5. writes the record back with a version condition.
 
+A queue that holds nothing (no PRs, no batch, no commands, never batched) is
+deleted rather than written, and a poke for a branch with no record and no
+open PR targeting it stops after one `GET /pulls`. Every push names its branch
+as a base, so without this a repository with many branches accumulates one
+record per branch pushed, and every check event fans out to all of them.
+
 A missed, duplicated, or out-of-order webhook therefore cannot corrupt
 anything; the 10-minute sweep repairs a missed one. This is the property that
 makes the service safe to run on at-least-once delivery.

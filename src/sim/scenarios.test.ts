@@ -27,6 +27,7 @@ interface World {
 	): number;
 	pushToPull(number: number, changes: Changes): void;
 	pushToBase(changes: Changes): void;
+	closePull(number: number): void;
 	requireReviews(r: Partial<ReviewRequirements>): void;
 	openConversation(number: number): void;
 	resolveConversations(number: number): void;
@@ -332,6 +333,19 @@ describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
 		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(a)).toBe("merged");
+	});
+
+	it("forgets a queue once nothing is left in it", async () => {
+		const { sim, port, store, cfg } = setup(config({ mode: "shadow" }));
+		const a = sim.openPull({ "a.txt": "a" });
+		await drive(sim, port, store, cfg);
+		expect(store.stored).toBe(true);
+
+		sim.closePull(a);
+		await drive(sim, port, store, cfg);
+
+		// A repository with many branches must not keep one stored queue per branch.
+		expect(store.stored).toBe(false);
 	});
 
 	it("lands a whole batch as one fast-forward in merge mode", async () => {

@@ -54,6 +54,25 @@ describe("DynamoQueueStore", () => {
 		expect((await t.queue(key, 42).load()).nextBatchId).toBe(9);
 	});
 
+	it("discards a queue's item, refusing if someone wrote it since the load", async () => {
+		const t = table();
+		const store = t.queue(key, 42);
+		await store.load();
+		await store.discard(); // nothing stored yet: a no-op
+		await store.save({ ...emptyState(), held: [1] });
+		await store.discard();
+		expect(db.items.size).toBe(0);
+		expect(await t.queue(key, 42).load()).toEqual(emptyState());
+
+		const a = t.queue(key, 42);
+		await a.save((await a.load(), { ...emptyState(), held: [1] }));
+		const b = t.queue(key, 42);
+		await b.load();
+		await a.save({ ...emptyState(), held: [2] });
+		await expect(b.discard()).rejects.toBeInstanceOf(VersionConflict);
+		expect(db.items.size).toBe(1);
+	});
+
 	it("will not save without loading first", async () => {
 		await expect(table().queue(key, 42).save(emptyState())).rejects.toThrow(/before load/);
 	});

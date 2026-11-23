@@ -1,11 +1,12 @@
 /**
  * An in-memory DynamoDB for tests: intercepts the document client and
- * implements the four commands the store uses, including its two condition
+ * implements the five commands the store uses, including its two condition
  * expressions. Test support only.
  */
 
 import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
+	DeleteCommand,
 	DynamoDBDocumentClient,
 	GetCommand,
 	PutCommand,
@@ -46,6 +47,21 @@ export function memoryDynamo() {
 			});
 		}
 		items.set(k, structuredClone(input.Item));
+		return {};
+	});
+	mock.on(DeleteCommand).callsFake((input) => {
+		const k = key(input.Key.pk, input.Key.sk);
+		const current = items.get(k);
+		if (
+			input.ConditionExpression === "version = :expected" &&
+			current?.version !== input.ExpressionAttributeValues?.[":expected"]
+		) {
+			throw new ConditionalCheckFailedException({
+				message: "The conditional request failed",
+				$metadata: {},
+			});
+		}
+		items.delete(k);
 		return {};
 	});
 	mock.on(QueryCommand).callsFake((input) => ({

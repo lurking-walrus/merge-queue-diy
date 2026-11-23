@@ -7,7 +7,7 @@
 
 import type { RepoConfig } from "./core/config";
 import { applyBuildResult, applyLandResult, decide } from "./core/decide";
-import type { Action } from "./core/types";
+import { type Action, isIdle } from "./core/types";
 import type { GitHubPort, QueueStore } from "./ports";
 
 /** Builds and lands feed back into the state, so one poke can take several passes. */
@@ -66,7 +66,9 @@ export async function reconcile(
 			batchChecks,
 		});
 		state = step.state;
-		await store.save(state);
+		// Nothing to remember: forget the queue rather than store an empty one.
+		if (isIdle(state)) await store.discard();
+		else await store.save(state);
 
 		let fedBack = false;
 		for (const a of step.actions) {

@@ -312,6 +312,20 @@ describe("reconcile handler", () => {
 		]);
 	});
 
+	it("settles a poke for a branch no queue lives on with one read, forgetting a stale queue", async () => {
+		const w = reconcileWorld();
+		w.fake.openPull({ "a.txt": "a" }); // targets main, not the branch below
+		const stale = w.table.queue({ owner: FAKE_OWNER, repo: FAKE_REPO, base: "backup/x" }, 42);
+		await stale.save(await stale.load());
+		w.fake.requests.length = 0;
+
+		const out = await handleMessage(w.deps, w.poke({ base: "backup/x", id: "webhook:d3" }));
+
+		expect(out).toEqual({ kind: "idle" });
+		expect(w.fake.requests).toEqual(["GET /pulls"]);
+		expect(await w.table.bases(FAKE_OWNER, FAKE_REPO)).toEqual([]);
+	});
+
 	it("routes a /dequeue to its PR's base, then applies it before reconciling", async () => {
 		const w = reconcileWorld();
 		const pr = w.fake.openPull({ "a.txt": "a" });
