@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseRepoConfig, type RepoConfig } from "../core/config";
+import type { Action } from "../core/types";
+import { FakeGitHub } from "../github/fake";
+import { adapterFor, interceptGitHub } from "../github/testing";
+import type { GitHubPort } from "../ports";
 import { reconcile } from "../reconcile";
-import { type CiFn, MemoryStore, SimGitHub } from "./github";
+import type { Changes, CiFn, Tree } from "./github";
+import { MemoryStore, SimGitHub } from "./github";
 
 function config(overrides: Record<string, unknown> = {}): RepoConfig {
 	return parseRepoConfig({
@@ -13,10 +18,65 @@ function config(overrides: Record<string, unknown> = {}): RepoConfig {
 	});
 }
 
+/** What a scenario does to, and asserts on, the repository. Both worlds provide it. */
+interface World {
+	now: number;
+	openPull(
+		changes: Changes,
+		o?: { draft?: boolean; fromFork?: boolean; labels?: string[] },
+	): number;
+	pushToPull(number: number, changes: Changes): void;
+	pushToBase(changes: Changes): void;
+	finishCi(): number;
+	mainTree(): Tree;
+	pullState(number: number): "open" | "merged" | "closed";
+	branchNames(): string[];
+	batchRuns(): number;
+	lastReport(number: number): Extract<Action, { type: "report" }> | undefined;
+	readonly reports: Extract<Action, { type: "report" }>[];
+	readonly comments: Extract<Action, { type: "comment" }>[];
+	readonly cancelled: string[];
+}
+
+const github = interceptGitHub();
+beforeAll(() => github.server.listen({ onUnhandledFrame: "error" }));
+afterAll(() => github.server.close());
+
+/**
+ * Every scenario runs twice: against the in-memory simulator, and against the
+ * production REST adapter talking HTTP to a fake GitHub. The adapter must
+ * behave like the simulator in all of them.
+ */
+const worlds: {
+	name: string;
+	make(cfg: RepoConfig, ci?: CiFn): { sim: World; port: GitHubPort };
+}[] = [
+	{
+		name: "the simulator",
+		make: (cfg, ci) => {
+			const sim = new SimGitHub({ ci, branchPrefix: cfg.branchPrefix });
+			return { sim, port: sim };
+		},
+	},
+	{
+		name: "the REST adapter over HTTP",
+		make: (cfg, ci) => {
+			const fake = new FakeGitHub({ ci, branchPrefix: cfg.branchPrefix });
+			github.use(fake);
+			return { sim: fake, port: adapterFor(fake) };
+		},
+	},
+];
+
 /** Reconcile, let CI finish, advance the clock when asked to, until nothing moves. */
-async function drive(sim: SimGitHub, store: MemoryStore, cfg: RepoConfig): Promise<void> {
+async function drive(
+	sim: World,
+	port: GitHubPort,
+	store: MemoryStore,
+	cfg: RepoConfig,
+): Promise<void> {
 	for (let round = 0; round < 100; round++) {
-		const { wakeAfterSeconds } = await reconcile(sim, store, cfg, sim.now);
+		const { wakeAfterSeconds } = await reconcile(port, store, cfg, sim.now);
 		if (sim.finishCi() > 0) continue;
 		if (wakeAfterSeconds === null) return;
 		sim.now += wakeAfterSeconds;
@@ -24,17 +84,17 @@ async function drive(sim: SimGitHub, store: MemoryStore, cfg: RepoConfig): Promi
 	throw new Error("queue did not settle");
 }
 
-function setup(cfg: RepoConfig, ci?: CiFn) {
-	const sim = new SimGitHub({ ci, branchPrefix: cfg.branchPrefix });
-	return { sim, store: new MemoryStore(), cfg };
-}
+describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
+	function setup(cfg: RepoConfig, ci?: CiFn) {
+		const { sim, port } = make(cfg, ci);
+		return { sim, port, store: new MemoryStore(), cfg };
+	}
 
-describe("merge queue, end to end against the simulator", () => {
 	it("lands ten independent PRs in two batch runs", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		for (let i = 1; i <= 10; i++) sim.openPull({ [`file-${i}.txt`]: `v${i}` });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		for (let i = 1; i <= 10; i++) {
 			expect(sim.pullState(i)).toBe("merged");
@@ -46,12 +106,12 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("ejects a textual conflict before spending CI on it", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		const first = sim.openPull({ "shared.txt": "from first" });
 		const second = sim.openPull({ "shared.txt": "from second" });
 		const third = sim.openPull({ "other.txt": "fine" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(first)).toBe("merged");
 		expect(sim.pullState(third)).toBe("merged");
@@ -69,15 +129,15 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("lets an ejected PR back in once its head changes", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		sim.openPull({ "shared.txt": "from first" });
 		const second = sim.openPull({ "shared.txt": "from second" });
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 		expect(sim.pullState(second)).toBe("open");
 
 		// Still conflicts: the fix has to actually resolve it.
 		sim.pushToPull(second, { "unrelated.txt": "x" });
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 		expect(sim.pullState(second)).toBe("open");
 		expect(sim.comments).toHaveLength(2);
 	});
@@ -85,7 +145,7 @@ describe("merge queue, end to end against the simulator", () => {
 	it("bisects a red batch down to the one PR that breaks the build", async () => {
 		// Each PR is fine alone; `breaker.txt` fails CI whenever it is present.
 		const ci: CiFn = (tree) => ({ ci: tree["breaker.txt"] ? "failure" : "success" });
-		const { sim, store, cfg } = setup(config({ pr_checks: [] }), ci);
+		const { sim, port, store, cfg } = setup(config({ pr_checks: [] }), ci);
 		const good = [
 			sim.openPull({ "a.txt": "a" }),
 			sim.openPull({ "b.txt": "b" }),
@@ -93,7 +153,7 @@ describe("merge queue, end to end against the simulator", () => {
 		];
 		const bad = sim.openPull({ "breaker.txt": "boom" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		for (const n of good) expect(sim.pullState(n)).toBe("merged");
 		expect(sim.pullState(bad)).toBe("open");
@@ -110,11 +170,11 @@ describe("merge queue, end to end against the simulator", () => {
 		const ci: CiFn = (tree) => ({
 			ci: tree["rename.txt"] && tree["caller.txt"] ? "failure" : "success",
 		});
-		const { sim, store, cfg } = setup(config(), ci);
+		const { sim, port, store, cfg } = setup(config(), ci);
 		const rename = sim.openPull({ "rename.txt": "renamed foo to bar" });
 		const caller = sim.openPull({ "caller.txt": "calls foo" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(rename)).toBe("merged");
 		expect(sim.pullState(caller)).toBe("open");
@@ -123,56 +183,56 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("lands a lone up-to-date PR on its own CI, with no batch run", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		const pr = sim.openPull({ "solo.txt": "x" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(pr)).toBe("merged");
 		expect(sim.batchRuns()).toBe(0);
 	});
 
 	it("does not take the fast path when PR-level CI is thinner than batch CI", async () => {
-		const { sim, store, cfg } = setup(config({ pr_checks: [] }));
+		const { sim, port, store, cfg } = setup(config({ pr_checks: [] }));
 		const pr = sim.openPull({ "solo.txt": "x" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(pr)).toBe("merged");
 		expect(sim.batchRuns()).toBe(1);
 	});
 
 	it("abandons a batch when a member is pushed to, and cancels its run", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		const a = sim.openPull({ "a.txt": "a" });
 		const b = sim.openPull({ "b.txt": "b" });
 		sim.finishCi();
-		await reconcile(sim, store, cfg, sim.now);
+		await reconcile(port, store, cfg, sim.now);
 		expect(store.state.batch?.status).toBe("testing");
 
 		sim.pushToPull(b, { "b.txt": "b2" });
-		await reconcile(sim, store, cfg, sim.now);
+		await reconcile(port, store, cfg, sim.now);
 		expect(sim.cancelled).toHaveLength(1);
 		// `a` is now alone and up to date, so it lands on its own CI at once.
 		expect(sim.pullState(a)).toBe("merged");
 		expect(store.state.batch).toBeNull();
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 		expect(sim.pullState(a)).toBe("merged");
 		expect(sim.pullState(b)).toBe("merged");
 		expect(sim.mainTree()["b.txt"]).toBe("b2");
 	});
 
 	it("rebuilds when someone pushes straight to the base branch", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		const a = sim.openPull({ "a.txt": "a" });
 		const b = sim.openPull({ "b.txt": "b" });
 		sim.finishCi();
-		await reconcile(sim, store, cfg, sim.now);
+		await reconcile(port, store, cfg, sim.now);
 		const firstBatch = store.state.batch?.id;
 
 		sim.pushToBase({ "hotfix.txt": "urgent" });
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(store.state.nextBatchId).toBeGreaterThan((firstBatch ?? 0) + 1);
 		expect(sim.pullState(a)).toBe("merged");
@@ -181,11 +241,11 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("never queues drafts or fork PRs", async () => {
-		const { sim, store, cfg } = setup(config());
+		const { sim, port, store, cfg } = setup(config());
 		const draft = sim.openPull({ "a.txt": "a" }, { draft: true });
 		const fork = sim.openPull({ "b.txt": "b" }, { fromFork: true });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(draft)).toBe("open");
 		expect(sim.pullState(fork)).toBe("open");
@@ -193,11 +253,11 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("in shadow mode reports what it would do and touches nothing", async () => {
-		const { sim, store, cfg } = setup(config({ mode: "shadow" }));
+		const { sim, port, store, cfg } = setup(config({ mode: "shadow" }));
 		const a = sim.openPull({ "a.txt": "a" });
 		const b = sim.openPull({ "b.txt": "b" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(a)).toBe("open");
 		expect(sim.pullState(b)).toBe("open");
@@ -207,11 +267,11 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("lands a whole batch as one fast-forward in merge mode", async () => {
-		const { sim, store, cfg } = setup(config({ merge_method: "merge" }));
+		const { sim, port, store, cfg } = setup(config({ merge_method: "merge" }));
 		const a = sim.openPull({ "a.txt": "a" });
 		const b = sim.openPull({ "b.txt": "b" });
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 
 		expect(sim.pullState(a)).toBe("merged");
 		expect(sim.pullState(b)).toBe("merged");
@@ -220,30 +280,30 @@ describe("merge queue, end to end against the simulator", () => {
 	});
 
 	it("waits for the settle period before batching a freshly pushed PR", async () => {
-		const { sim, store, cfg } = setup(config({ settle_seconds: 120 }));
+		const { sim, port, store, cfg } = setup(config({ settle_seconds: 120 }));
 		const pr = sim.openPull({ "a.txt": "a" });
 		sim.finishCi();
 
-		const first = await reconcile(sim, store, cfg, sim.now);
+		const first = await reconcile(port, store, cfg, sim.now);
 		expect(first.wakeAfterSeconds).toBe(120);
 		expect(sim.pullState(pr)).toBe("open");
 
 		sim.now += 120;
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 		expect(sim.pullState(pr)).toBe("merged");
 	});
 
 	it("holds a short batch open while another PR's checks are still running", async () => {
-		const { sim, store, cfg } = setup(config({ max_wait_seconds: 300 }));
+		const { sim, port, store, cfg } = setup(config({ max_wait_seconds: 300 }));
 		const a = sim.openPull({ "a.txt": "a" });
 		sim.finishCi();
 		const b = sim.openPull({ "b.txt": "b" }); // CI still running
 
-		const first = await reconcile(sim, store, cfg, sim.now);
+		const first = await reconcile(port, store, cfg, sim.now);
 		expect(store.state.batch).toBeNull();
 		expect(first.wakeAfterSeconds).toBe(300);
 
-		await drive(sim, store, cfg);
+		await drive(sim, port, store, cfg);
 		expect(sim.pullState(a)).toBe("merged");
 		expect(sim.pullState(b)).toBe("merged");
 		expect(sim.batchRuns()).toBe(1);

@@ -26,7 +26,14 @@ case "$CMD" in
 	*) exit 0 ;;
 esac
 
-echo "🔒 Pre-commit gate: running 'pnpm check' and 'pnpm test'…" >&2
+# Gate the checkout the commit happens in. The hook itself runs from the
+# project root, which is a different tree when the session is in a worktree.
+DIR="$(printf '%s' "$INPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).cwd??"")}catch{process.stdout.write("")}})')"
+if [ -n "$DIR" ] && [ -f "$DIR/package.json" ]; then
+	cd "$DIR"
+fi
+
+echo "🔒 Pre-commit gate: running 'pnpm check' and 'pnpm test' in $(pwd)…" >&2
 if ! pnpm check >&2; then
 	echo "❌ Biome check failed — fix with 'pnpm check:fix' before committing." >&2
 	exit 2
