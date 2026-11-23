@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseRepoConfig } from "./config";
 import { applyBuildResult, applyCommand, applyLandResult, decide } from "./decide";
-import { emptyState, type PullState, type QueueState, type Snapshot } from "./types";
+import {
+	emptyState,
+	NO_REVIEW_REQUIREMENTS,
+	type PullState,
+	type QueueState,
+	type Snapshot,
+} from "./types";
 
 const cfg = parseRepoConfig({
 	mode: "enforce",
@@ -20,6 +26,7 @@ function pull(number: number, over: Partial<PullState> = {}): PullState {
 		labels: [],
 		checks: { state: "success", failed: [] },
 		upToDate: false,
+		reviews: { unresolvedConversations: 0, approvals: 0 },
 		...over,
 	};
 }
@@ -31,6 +38,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
 		baseBranch: "main",
 		baseSha: "base-1",
 		pulls: [],
+		reviewRequirements: NO_REVIEW_REQUIREMENTS,
 		state: emptyState(),
 		batchChecks: null,
 		...over,

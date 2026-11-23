@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseRepoConfig, type RepoConfig } from "../core/config";
-import type { Action } from "../core/types";
+import type { Action, ReviewRequirements } from "../core/types";
 import { FakeGitHub } from "../github/fake";
 import { adapterFor, interceptGitHub } from "../github/testing";
 import type { GitHubPort } from "../ports";
@@ -27,6 +27,10 @@ interface World {
 	): number;
 	pushToPull(number: number, changes: Changes): void;
 	pushToBase(changes: Changes): void;
+	requireReviews(r: Partial<ReviewRequirements>): void;
+	openConversation(number: number): void;
+	resolveConversations(number: number): void;
+	approve(number: number, reviewer: string): void;
 	finishCi(): number;
 	mainTree(): Tree;
 	pullState(number: number): "open" | "merged" | "closed";
@@ -278,6 +282,56 @@ describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
 		expect(sim.lastReport(a)?.summary).toBe("[shadow] waiting: own checks failing (ci)");
 		expect(sim.lastReport(a)?.shadow).toBe(true);
 		expect(sim.pullState(a)).toBe("open");
+	});
+
+	it("holds a PR with unresolved conversations when the branch requires them resolved", async () => {
+		const { sim, port, store, cfg } = setup(config());
+		sim.requireReviews({ resolvedConversations: true });
+		const discussed = sim.openPull({ "a.txt": "a" });
+		const quiet = sim.openPull({ "b.txt": "b" });
+		sim.openConversation(discussed);
+		sim.openConversation(discussed);
+
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(quiet)).toBe("merged");
+		expect(sim.pullState(discussed)).toBe("open");
+		expect(sim.lastReport(discussed)?.summary).toBe("waiting: 2 unresolved review conversations");
+
+		sim.resolveConversations(discussed);
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(discussed)).toBe("merged");
+		expect(sim.mainTree()["a.txt"]).toBe("a");
+	});
+
+	it("holds a PR until it has the approvals the branch requires", async () => {
+		const { sim, port, store, cfg } = setup(config());
+		sim.requireReviews({ approvals: 2 });
+		const a = sim.openPull({ "a.txt": "a" });
+		sim.approve(a, "reviewer-1");
+
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(a)).toBe("open");
+		expect(sim.lastReport(a)?.summary).toBe("waiting: 1 of 2 required approvals");
+		expect(sim.batchRuns()).toBe(0);
+
+		sim.approve(a, "reviewer-2");
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(a)).toBe("merged");
+	});
+
+	it("ignores the branch's review rules with review_requirements: none", async () => {
+		const { sim, port, store, cfg } = setup(config({ review_requirements: "none" }));
+		sim.requireReviews({ resolvedConversations: true, approvals: 1 });
+		const a = sim.openPull({ "a.txt": "a" });
+		sim.openConversation(a);
+
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(a)).toBe("merged");
 	});
 
 	it("lands a whole batch as one fast-forward in merge mode", async () => {

@@ -7,14 +7,26 @@
  */
 
 import type { RepoConfig } from "./core/config";
-import type { Action, BuildResult, LandResult, PullState, QueueState, Rollup } from "./core/types";
+import type {
+	Action,
+	BuildResult,
+	LandResult,
+	PullState,
+	QueueState,
+	ReviewRequirements,
+	Rollup,
+} from "./core/types";
 
 type ActionOf<T extends Action["type"]> = Extract<Action, { type: T }>;
 
 export interface GitHubPort {
 	readonly baseBranch: string;
-	/** Tip of the base branch and every open PR targeting it. */
-	readQueue(config: RepoConfig): Promise<{ baseSha: string; pulls: PullState[] }>;
+	/**
+	 * Tip of the base branch, every open PR targeting it, and what the base
+	 * branch's rules require of reviews. With `reviewRequirements: "none"` an
+	 * adapter may skip reading reviews and return none.
+	 */
+	readQueue(config: RepoConfig): Promise<QueueRead>;
 	/** Rollup of the named checks on a commit. A check that has not reported is pending. */
 	readChecks(sha: string, names: string[]): Promise<Rollup>;
 	/**
@@ -32,6 +44,12 @@ export interface GitHubPort {
 	report(action: ActionOf<"report">): Promise<void>;
 	comment(action: ActionOf<"comment">): Promise<void>;
 	openIssue(action: ActionOf<"openIssue">): Promise<void>;
+}
+
+export interface QueueRead {
+	baseSha: string;
+	pulls: PullState[];
+	reviewRequirements: ReviewRequirements;
 }
 
 export interface QueueStore {

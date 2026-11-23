@@ -11,9 +11,17 @@
 
 import { createHash } from "node:crypto";
 import type { RepoConfig } from "../core/config";
-import type { Action, BuildResult, LandResult, PullState, QueueState, Rollup } from "../core/types";
-import { emptyState } from "../core/types";
-import type { GitHubPort, QueueStore } from "../ports";
+import type {
+	Action,
+	BuildResult,
+	LandResult,
+	PullState,
+	QueueState,
+	ReviewRequirements,
+	Rollup,
+} from "../core/types";
+import { emptyState, NO_REVIEW_REQUIREMENTS } from "../core/types";
+import type { GitHubPort, QueueRead, QueueStore } from "../ports";
 
 type ActionOf<T extends Action["type"]> = Extract<Action, { type: T }>;
 
@@ -37,6 +45,9 @@ interface SimPull {
 	labels: string[];
 	headUpdatedAt: number;
 	state: "open" | "merged" | "closed";
+	/** One entry per review conversation: true once resolved. */
+	conversations: boolean[];
+	approvers: Set<string>;
 }
 
 export interface CiRun {
@@ -94,6 +105,7 @@ export class SimGitHub implements GitHubPort {
 	private readonly results = new Map<string, Record<string, "success" | "failure">>();
 	private readonly pendingCi = new Set<string>();
 	private counter = 0;
+	private reviewRules: ReviewRequirements = { ...NO_REVIEW_REQUIREMENTS };
 
 	constructor(private readonly opts: { ci?: CiFn; branchPrefix?: string; initial?: Tree } = {}) {
 		this.branches.set("main", this.commit(opts.initial ?? { "README.md": "hello" }, []));
@@ -117,6 +129,8 @@ export class SimGitHub implements GitHubPort {
 			labels: o.labels ?? [],
 			headUpdatedAt: this.now,
 			state: "open",
+			conversations: [],
+			approvers: new Set(),
 		});
 		this.startCi(headSha, "pr");
 		return number;
@@ -133,6 +147,24 @@ export class SimGitHub implements GitHubPort {
 	pushToBase(changes: Changes): void {
 		const base = this.main();
 		this.branches.set("main", this.commit(apply(this.tree(base), changes), [base]));
+	}
+
+	/** What the base branch's rules require of reviews (a ruleset's pull_request rule). */
+	requireReviews(r: Partial<ReviewRequirements>): void {
+		this.reviewRules = { ...this.reviewRules, ...r };
+	}
+
+	openConversation(number: number): void {
+		this.pull(number).conversations.push(false);
+	}
+
+	resolveConversations(number: number): void {
+		const p = this.pull(number);
+		p.conversations = p.conversations.map(() => true);
+	}
+
+	approve(number: number, reviewer: string): void {
+		this.pull(number).approvers.add(reviewer);
 	}
 
 	closePull(number: number): void {
@@ -172,7 +204,7 @@ export class SimGitHub implements GitHubPort {
 
 	// --- GitHubPort ---------------------------------------------------------
 
-	async readQueue(config: RepoConfig): Promise<{ baseSha: string; pulls: PullState[] }> {
+	async readQueue(config: RepoConfig): Promise<QueueRead> {
 		const baseSha = this.main();
 		const pulls: PullState[] = [];
 		for (const p of this.pulls.values()) {
@@ -186,9 +218,13 @@ export class SimGitHub implements GitHubPort {
 				labels: [...p.labels],
 				checks: await this.readChecks(p.headSha, config.prChecks),
 				upToDate: p.forkBase === baseSha,
+				reviews: {
+					unresolvedConversations: p.conversations.filter((resolved) => !resolved).length,
+					approvals: p.approvers.size,
+				},
 			});
 		}
-		return { baseSha, pulls };
+		return { baseSha, pulls, reviewRequirements: { ...this.reviewRules } };
 	}
 
 	async readChecks(sha: string, names: string[]): Promise<Rollup> {

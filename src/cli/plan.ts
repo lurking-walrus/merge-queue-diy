@@ -11,16 +11,33 @@
 
 import type { RepoConfig } from "../core/config";
 import { decide } from "../core/decide";
-import { type Action, emptyState, type PullState, type Step } from "../core/types";
+import {
+	type Action,
+	emptyState,
+	type PullState,
+	type ReviewRequirements,
+	type Step,
+} from "../core/types";
 import { RestGitHub } from "../github/adapter";
 import { type ConfigResult, loadRepoConfig, parseConfigText } from "../github/config";
 import type { Kit } from "../github/octokit";
 
-/** Make a client unable to change anything: any non-GET request throws before it is sent. */
+/**
+ * Make a client unable to change anything: any request that is not a GET
+ * throws before it is sent. The one exception is a GraphQL `query` (review
+ * threads have no REST read), which GitHub sends as a POST but cannot write;
+ * a GraphQL mutation is refused like any other write.
+ */
 export function readOnly(kit: Kit): Kit {
 	kit.hook.before("request", (options) => {
 		const method = String(options.method ?? "GET").toUpperCase();
-		if (method !== "GET" && method !== "HEAD") {
+		const query = (options as { query?: unknown }).query;
+		const graphqlRead =
+			method === "POST" &&
+			String(options.url) === "/graphql" &&
+			typeof query === "string" &&
+			/^\s*query\b/.test(query);
+		if (method !== "GET" && method !== "HEAD" && !graphqlRead) {
 			throw new Error(`dry run: refusing to send ${method} ${String(options.url)}`);
 		}
 	});
@@ -42,7 +59,13 @@ export interface PlanOptions {
 
 export type PlanResult =
 	| { config: Exclude<ConfigResult, { kind: "ok" }> }
-	| { config: { kind: "ok"; config: RepoConfig }; baseSha: string; pulls: PullState[]; step: Step };
+	| {
+			config: { kind: "ok"; config: RepoConfig };
+			baseSha: string;
+			pulls: PullState[];
+			reviewRequirements: ReviewRequirements;
+			step: Step;
+	  };
 
 export async function plan(o: PlanOptions): Promise<PlanResult> {
 	const loaded =
@@ -53,17 +76,18 @@ export async function plan(o: PlanOptions): Promise<PlanResult> {
 	const config: RepoConfig = o.enforce ? { ...loaded.config, mode: "enforce" } : loaded.config;
 
 	const port = new RestGitHub({ octokit: o.kit, owner: o.owner, repo: o.repo, baseBranch: o.base });
-	const { baseSha, pulls } = await port.readQueue(config);
+	const { baseSha, pulls, reviewRequirements } = await port.readQueue(config);
 	const step = decide({
 		now: o.now,
 		config,
 		baseBranch: o.base,
 		baseSha,
 		pulls,
+		reviewRequirements,
 		state: emptyState(),
 		batchChecks: null,
 	});
-	return { config: { kind: "ok", config }, baseSha, pulls, step };
+	return { config: { kind: "ok", config }, baseSha, pulls, reviewRequirements, step };
 }
 
 function describe(a: Action): string {
@@ -86,6 +110,17 @@ function describe(a: Action): string {
 	}
 }
 
+function describeReviews(r: ReviewRequirements, mode: RepoConfig["reviewRequirements"]): string {
+	if (mode === "none") return "ignored";
+	const parts = [
+		r.resolvedConversations && "conversations resolved",
+		r.approvals > 0 && `${r.approvals} approval(s)`,
+	].filter(Boolean);
+	return parts.length > 0
+		? `${parts.join(", ")} (from the branch's rules)`
+		: "none in the branch's rules";
+}
+
 export function formatPlan(r: PlanResult, o: Pick<PlanOptions, "owner" | "repo" | "base">): string {
 	const where = `${o.owner}/${o.repo}@${o.base}`;
 	if (r.config.kind === "missing")
@@ -97,6 +132,7 @@ export function formatPlan(r: PlanResult, o: Pick<PlanOptions, "owner" | "repo" 
 	const lines = [
 		`${where} at ${r.baseSha.slice(0, 7)} — mode ${c.mode}, enqueue ${c.enqueue}, ${c.mergeMethod}, batch ${c.batchSize}`,
 		`required checks: ${c.requiredChecks.join(", ")}; PR checks: ${c.prChecks.join(", ") || "(none)"}`,
+		`review requirements (${c.reviewRequirements}): ${describeReviews(r.reviewRequirements, c.reviewRequirements)}`,
 		"",
 		`${r.pulls.length} open pull request(s):`,
 	];
@@ -106,6 +142,9 @@ export function formatPlan(r: PlanResult, o: Pick<PlanOptions, "owner" | "repo" 
 			p.fromFork && "fork",
 			p.upToDate && "up to date",
 			p.labels.length > 0 && `labels: ${p.labels.join(", ")}`,
+			p.reviews.unresolvedConversations > 0 &&
+				`${p.reviews.unresolvedConversations} unresolved conversation(s)`,
+			r.reviewRequirements.approvals > 0 && `${p.reviews.approvals} approval(s)`,
 		].filter(Boolean);
 		const checks =
 			p.checks.state === "failure" ? `failure (${p.checks.failed.join(", ")})` : p.checks.state;

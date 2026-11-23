@@ -27,6 +27,10 @@ const fileSchema = z
 			.default("mq"),
 		queue_label: z.string().min(1).default("queue"),
 		jump_label: z.string().min(1).default("queue:jump"),
+		// `auto`: hold a PR back until it meets the review requirements the base
+		// branch's rules set (resolved conversations, required approvals), since
+		// GitHub would refuse to merge it. `none`: ignore them.
+		review_requirements: z.enum(["auto", "none"]).default("auto"),
 	})
 	.strict();
 
@@ -44,6 +48,7 @@ export interface RepoConfig {
 	branchPrefix: string;
 	queueLabel: string;
 	jumpLabel: string;
+	reviewRequirements: "auto" | "none";
 }
 
 /**
@@ -67,5 +72,6 @@ export function parseRepoConfig(input: unknown): RepoConfig {
 		branchPrefix: f.branch_prefix,
 		queueLabel: f.queue_label,
 		jumpLabel: f.jump_label,
+		reviewRequirements: f.review_requirements,
 	};
 }
