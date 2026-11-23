@@ -245,9 +245,29 @@ batch_size: 5
 settle_seconds: 120
 max_wait_seconds: 300    # ship a short batch rather than wait for a full one
 on_failure: bisect       # bisect | serial
+review_requirements: auto  # auto: follow the base branch's review rules | none
 ```
 
-Unknown keys are rejected, so a typo cannot silently disable a setting. The
+Unknown keys are rejected, so a typo cannot silently disable a setting.
+
+**Review requirements.** A PR that GitHub would refuse to merge must not take
+a place in a batch, or the batch spends CI and then ejects it. With
+`review_requirements: auto` (the default) the queue reads the rules that apply
+to the base branch (`GET /repos/{owner}/{repo}/rules/branches/{branch}`,
+repository and organization rulesets) and holds a PR back, reported as
+`waiting: …`, until it meets what their `pull_request` rules require:
+
+- `required_review_thread_resolution`: no unresolved review conversations;
+- `required_approving_review_count`: that many reviewers whose latest review
+  approves.
+
+Conversations and approvals are read with one GraphQL query per 50 open PRs,
+and only when a rule requires them. Classic branch protection is not readable
+without the Administration permission; on such a repository set what you need
+by hand, or `none` to ignore review rules altogether. Unreadable rules count
+as none. Code-owner review, last-push approval and stale-review dismissal are
+not modelled yet: a PR held back only by those is still queued and is ejected
+if GitHub refuses the merge. The
 fast path (§5) applies only when `pr_checks` covers every `required_checks`
 entry; with thinner PR-level CI a lone PR still gets a batch run.
 
@@ -286,13 +306,13 @@ hosted instance.
 | Permission | Level | For |
 | --- | --- | --- |
 | Contents | write | create/delete batch branches, merge |
-| Pull requests | write | merge, comment, label |
+| Pull requests | write | merge, comment, label; review threads and approvals (§9) |
 | Checks | write | the `merge-queue` check |
 | Commit statuses | read | repos that report via statuses |
 | Actions | write | cancel superseded runs |
 | Workflows | write | without it, a batch containing a `.github/workflows/**` change cannot be pushed |
 | Issues | write | ejection comments and the "queue frozen" issue (both use the issues API) |
-| Metadata | read | mandatory |
+| Metadata | read | mandatory; also reads the base branch's rules (§9) |
 
 Events: `pull_request`, `push`, `check_run`, `check_suite`, `status`,
 `workflow_run`, `issue_comment`, `installation_repositories`.

@@ -18,7 +18,14 @@ required_checks: [ci]   # the check-run (or status) names CI reports on a commit
 # settle_seconds: 120
 # max_wait_seconds: 300
 # merge_method: squash  # or merge (fast-forward; see DESIGN.md §6)
+# review_requirements: auto  # follow the base branch's review rules (default) | none
 ```
+
+With the default `review_requirements: auto`, a PR waits until it meets the
+review rules your base branch's rulesets set, such as resolved conversations or
+a number of approvals, because GitHub would refuse to merge it otherwise. The
+dry run prints what it found. Repositories using classic branch protection
+rather than rulesets are not detected (DESIGN.md §9).
 
 - No file means the queue is off for that repository.
 - An invalid file turns it off too, and every open PR's `merge-queue` check

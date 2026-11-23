@@ -135,6 +135,65 @@ describe("readQueue", () => {
 	});
 });
 
+describe("review requirements", () => {
+	it("reads none, and asks GraphQL nothing, when the branch has no review rules", async () => {
+		const { fake, gh } = world();
+		fake.openPull({ "a.txt": "a" });
+
+		const read = await gh.readQueue(cfg);
+
+		expect(read.reviewRequirements).toEqual({ resolvedConversations: false, approvals: 0 });
+		expect(read.pulls[0]?.reviews).toEqual({ unresolvedConversations: 0, approvals: 0 });
+		expect(fake.requests).not.toContain("POST /graphql");
+		expect(fake.requests).toContain("GET /rules/branches/main");
+	});
+
+	it("reads the ruleset's requirements and each PR's conversations and approvals", async () => {
+		const { fake, gh } = world();
+		fake.requireReviews({ resolvedConversations: true, approvals: 2 });
+		const a = fake.openPull({ "a.txt": "a" });
+		const b = fake.openPull({ "b.txt": "b" });
+		fake.openConversation(a);
+		fake.openConversation(a);
+		fake.resolveConversations(a);
+		fake.openConversation(a);
+		fake.approve(b, "reviewer-1");
+
+		const read = await gh.readQueue(cfg);
+		const by = new Map(read.pulls.map((p) => [p.number, p.reviews]));
+
+		expect(read.reviewRequirements).toEqual({ resolvedConversations: true, approvals: 2 });
+		expect(by.get(a)).toEqual({ unresolvedConversations: 1, approvals: 0 });
+		expect(by.get(b)).toEqual({ unresolvedConversations: 0, approvals: 1 });
+	});
+
+	it("counts unreadable rules as none rather than failing the reconcile", async () => {
+		const { fake, gh } = world();
+		fake.requireReviews({ resolvedConversations: true });
+		github.server.use(
+			http.get(`${REPO_URL}/rules/branches/:branch`, () =>
+				HttpResponse.json({ message: "Resource not accessible by integration" }, { status: 403 }),
+			),
+		);
+		fake.openPull({ "a.txt": "a" });
+
+		const read = await gh.readQueue(cfg);
+		github.server.resetHandlers();
+
+		expect(read.reviewRequirements).toEqual({ resolvedConversations: false, approvals: 0 });
+	});
+
+	it("reads neither rules nor reviews with review_requirements: none", async () => {
+		const { fake, gh } = world();
+		fake.requireReviews({ resolvedConversations: true });
+		fake.openPull({ "a.txt": "a" });
+
+		await gh.readQueue(parseRepoConfig({ required_checks: ["ci"], review_requirements: "none" }));
+
+		expect(fake.requests.some((r) => r.includes("/rules/") || r.includes("graphql"))).toBe(false);
+	});
+});
+
 describe("readChecks", () => {
 	it("rolls up check runs and legacy statuses by name, newest result winning", async () => {
 		const { fake, gh } = world({ ci: () => ({}) });

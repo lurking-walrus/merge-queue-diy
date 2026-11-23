@@ -27,6 +27,7 @@ import type {
 	Snapshot,
 	Step,
 } from "./types";
+import { NO_REVIEW_REQUIREMENTS } from "./types";
 
 export function batchBranch(cfg: RepoConfig, baseBranch: string, id: number): string {
 	return `${cfg.branchPrefix}/${baseBranch}/${id}`;
@@ -93,6 +94,22 @@ export function decide(snap: Snapshot): Step {
 	};
 	const isEjected = (n: number) => st.ejected[String(n)] !== undefined;
 
+	// What GitHub would refuse a merge for, beyond checks: the base branch's
+	// review rules. Null when the PR meets them.
+	const required =
+		cfg.reviewRequirements === "none" ? NO_REVIEW_REQUIREMENTS : snap.reviewRequirements;
+	const reviewsBlocking = (p: PullState): string | null => {
+		const why: string[] = [];
+		const open = p.reviews.unresolvedConversations;
+		if (required.resolvedConversations && open > 0) {
+			why.push(`${open} unresolved review conversation${open === 1 ? "" : "s"}`);
+		}
+		if (p.reviews.approvals < required.approvals) {
+			why.push(`${p.reviews.approvals} of ${required.approvals} required approvals`);
+		}
+		return why.length > 0 ? why.join(", ") : null;
+	};
+
 	// --- Sync the queue with the open pull requests ------------------------
 	// Members of a landing batch are exempt: they disappear from the open list
 	// one by one as they merge, and that must not look like a dequeue.
@@ -102,13 +119,13 @@ export function decide(snap: Snapshot): Step {
 	st.entries = st.entries.filter((e) => {
 		if (landing.has(e.number)) return true;
 		const p = pulls.get(e.number);
-		return p !== undefined && p.headSha === e.headSha && wanted(p);
+		return p !== undefined && p.headSha === e.headSha && wanted(p) && reviewsBlocking(p) === null;
 	});
 	const queued = new Set(st.entries.map((e) => e.number));
 	const byNumber = [...pulls.values()].sort((a, b) => a.number - b.number);
 	for (const p of byNumber) {
 		if (queued.has(p.number) || !wanted(p) || isEjected(p.number)) continue;
-		if (p.checks.state !== "success") continue;
+		if (p.checks.state !== "success" || reviewsBlocking(p) !== null) continue;
 		st.entries.push({ number: p.number, headSha: p.headSha, enqueuedAt: now });
 		queued.add(p.number);
 	}
@@ -260,12 +277,15 @@ export function decide(snap: Snapshot): Step {
 		} else if (st.held.includes(p.number)) {
 			report = { state: "held", summary: "held by /dequeue" };
 		} else if (wanted(p)) {
+			const blocking = reviewsBlocking(p);
 			report = {
 				state: "waiting",
 				summary:
 					p.checks.state === "failure"
 						? `waiting: own checks failing (${p.checks.failed.join(", ")})`
-						: "waiting for own checks",
+						: p.checks.state === "success" && blocking
+							? `waiting: ${blocking}`
+							: "waiting for own checks",
 			};
 		}
 		const key = String(p.number);

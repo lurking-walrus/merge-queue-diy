@@ -19,9 +19,12 @@ import type {
 	Member,
 	PullState,
 	ReportState,
+	ReviewCounts,
+	ReviewRequirements,
 	Rollup,
 } from "../core/types";
-import type { GitHubPort } from "../ports";
+import { NO_REVIEW_REQUIREMENTS } from "../core/types";
+import type { GitHubPort, QueueRead } from "../ports";
 import { httpMessage, httpStatus, type Kit } from "./octokit";
 
 type ActionOf<T extends Action["type"]> = Extract<Action, { type: T }>;
@@ -30,6 +33,33 @@ type ActionOf<T extends Action["type"]> = Extract<Action, { type: T }>;
 export const CHECK_NAME = "merge-queue";
 /** Finds the ejection comment again so a repeat edits it instead of adding another. */
 export const COMMENT_MARKER = "<!-- merge-queue:ejection -->";
+/** One page of open PRs with what review rules can require of them. */
+export const REVIEW_QUERY = `query MergeQueueReviews($owner: String!, $repo: String!, $base: String!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequests(states: OPEN, baseRefName: $base, first: 50, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        reviewThreads(first: 100) { nodes { isResolved } }
+        latestOpinionatedReviews(first: 100) { nodes { state } }
+      }
+    }
+  }
+}`;
+
+interface ReviewQuery {
+	repository: {
+		pullRequests: {
+			pageInfo: { hasNextPage: boolean; endCursor: string | null };
+			nodes: Array<{
+				number: number;
+				reviewThreads: { nodes: Array<{ isResolved: boolean } | null> | null };
+				latestOpinionatedReviews: { nodes: Array<{ state: string } | null> | null } | null;
+			} | null> | null;
+		};
+	} | null;
+}
+
 /** Records which member a batch commit came from, so a repeated build can recover it. */
 const MEMBER_TRAILER = "Merge-Queue-Member:";
 
@@ -139,9 +169,18 @@ export class RestGitHub implements GitHubPort {
 
 	// --- Reads --------------------------------------------------------------
 
-	async readQueue(config: RepoConfig): Promise<{ baseSha: string; pulls: PullState[] }> {
+	async readQueue(config: RepoConfig): Promise<QueueRead> {
 		const baseSha = await this.branchSha(this.baseBranch);
 		if (!baseSha) throw new Error(`base branch ${this.baseBranch} does not exist`);
+		const reviewRequirements =
+			config.reviewRequirements === "none"
+				? NO_REVIEW_REQUIREMENTS
+				: await this.readReviewRequirements();
+		const needReviews =
+			reviewRequirements.resolvedConversations || reviewRequirements.approvals > 0;
+		const reviews = needReviews ? await this.readReviewCounts() : new Map<number, ReviewCounts>();
+		const reviewsOf = (n: number): ReviewCounts =>
+			reviews.get(n) ?? { unresolvedConversations: 0, approvals: 0 };
 		const open = await this.kit.paginate(this.kit.rest.pulls.list, {
 			...this.at,
 			state: "open",
@@ -165,6 +204,7 @@ export class RestGitHub implements GitHubPort {
 					labels,
 					checks: { state: "pending", failed: [] },
 					upToDate: false,
+					reviews: reviewsOf(p.number),
 				});
 				continue;
 			}
@@ -182,9 +222,72 @@ export class RestGitHub implements GitHubPort {
 				labels,
 				checks: await this.readChecks(p.head.sha, config.prChecks),
 				upToDate: cmp.behind_by === 0,
+				reviews: reviewsOf(p.number),
 			});
 		}
-		return { baseSha, pulls };
+		return { baseSha, pulls, reviewRequirements };
+	}
+
+	/**
+	 * The review requirements of the rules that apply to the base branch
+	 * (repository and organization rulesets). Classic branch protection is not
+	 * readable without the Administration permission; set
+	 * `review_requirements` explicitly there. Unreadable rules count as none.
+	 */
+	private async readReviewRequirements(): Promise<ReviewRequirements> {
+		let rules: { type: string; parameters?: unknown }[];
+		try {
+			rules = await this.kit.paginate(this.kit.rest.repos.getBranchRules, {
+				...this.at,
+				branch: this.baseBranch,
+				per_page: 100,
+			});
+		} catch (e) {
+			if (httpStatus(e) === 403 || httpStatus(e) === 404) return NO_REVIEW_REQUIREMENTS;
+			throw e;
+		}
+		const out = { ...NO_REVIEW_REQUIREMENTS };
+		for (const rule of rules) {
+			if (rule.type !== "pull_request") continue;
+			const p = (rule.parameters ?? {}) as {
+				required_review_thread_resolution?: boolean;
+				required_approving_review_count?: number;
+			};
+			out.resolvedConversations ||= p.required_review_thread_resolution === true;
+			out.approvals = Math.max(out.approvals, p.required_approving_review_count ?? 0);
+		}
+		return out;
+	}
+
+	/**
+	 * Unresolved conversations and approvals of every open PR on the base
+	 * branch. REST has no resolution state for review threads, so this is one
+	 * GraphQL query per 50 PRs (a read: the dry run's read-only client allows it).
+	 */
+	private async readReviewCounts(): Promise<Map<number, ReviewCounts>> {
+		const out = new Map<number, ReviewCounts>();
+		let after: string | null = null;
+		do {
+			const res: ReviewQuery = await this.kit.graphql<ReviewQuery>(REVIEW_QUERY, {
+				owner: this.owner,
+				repo: this.repo,
+				base: this.baseBranch,
+				after,
+			});
+			const prs = res.repository?.pullRequests;
+			for (const pr of prs?.nodes ?? []) {
+				if (!pr) continue;
+				out.set(pr.number, {
+					unresolvedConversations: (pr.reviewThreads.nodes ?? []).filter((t) => t && !t.isResolved)
+						.length,
+					approvals: (pr.latestOpinionatedReviews?.nodes ?? []).filter(
+						(r) => r?.state === "APPROVED",
+					).length,
+				});
+			}
+			after = prs?.pageInfo.hasNextPage ? prs.pageInfo.endCursor : null;
+		} while (after);
+		return out;
 	}
 
 	async readChecks(sha: string, names: string[]): Promise<Rollup> {

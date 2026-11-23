@@ -29,7 +29,30 @@ export interface PullState {
 	checks: Rollup;
 	/** True when the head already contains the current tip of the base branch. */
 	upToDate: boolean;
+	/** Review state that the base branch's rules can require. */
+	reviews: ReviewCounts;
 }
+
+export interface ReviewCounts {
+	/** Review conversations not yet marked resolved. */
+	unresolvedConversations: number;
+	/** Reviewers whose latest review approves. */
+	approvals: number;
+}
+
+/**
+ * What the base branch's rules require of a pull request's reviews before it
+ * may merge. A PR that does not meet them cannot land, so it is not queued.
+ */
+export interface ReviewRequirements {
+	resolvedConversations: boolean;
+	approvals: number;
+}
+
+export const NO_REVIEW_REQUIREMENTS: ReviewRequirements = {
+	resolvedConversations: false,
+	approvals: 0,
+};
 
 export interface Entry {
 	number: number;
@@ -107,6 +130,8 @@ export interface Snapshot {
 	/** Current tip of the base branch. */
 	baseSha: string;
 	pulls: PullState[];
+	/** What the base branch's rules require of reviews, as GitHub reports them. */
+	reviewRequirements: ReviewRequirements;
 	state: QueueState;
 	/** Rollup of `config.requiredChecks` on the active batch's commit, when it is testing. */
 	batchChecks: Rollup | null;

@@ -13,7 +13,8 @@
  */
 
 import { createHash } from "node:crypto";
-import type { Action, EjectionPayload, ReportState } from "../core/types";
+import type { Action, EjectionPayload, ReportState, ReviewRequirements } from "../core/types";
+import { NO_REVIEW_REQUIREMENTS } from "../core/types";
 import {
 	apply,
 	type Changes,
@@ -58,6 +59,9 @@ interface FakePull {
 	labels: string[];
 	updatedAt: number;
 	state: "open" | "merged" | "closed";
+	/** One entry per review thread: true once resolved. */
+	conversations: boolean[];
+	approvers: Set<string>;
 }
 
 interface CheckRun {
@@ -129,6 +133,7 @@ export class FakeGitHub {
 		[];
 	private readonly workflowRuns: WorkflowRun[] = [];
 	private readonly pendingCi = new Set<string>();
+	private reviewRules: ReviewRequirements = { ...NO_REVIEW_REQUIREMENTS };
 	private ids = 0;
 	private counter = 0;
 
@@ -153,6 +158,8 @@ export class FakeGitHub {
 			labels: o.labels ?? [],
 			updatedAt: this.now,
 			state: "open",
+			conversations: [],
+			approvers: new Set(),
 		});
 		this.startCi(headSha, "pr");
 		return number;
@@ -163,6 +170,24 @@ export class FakeGitHub {
 		p.headSha = this.commit(apply(this.tree(p.headSha), changes), [p.headSha], `pr ${number}`);
 		p.updatedAt = this.now;
 		this.startCi(p.headSha, "pr");
+	}
+
+	/** Served as the base branch's ruleset `pull_request` rule. */
+	requireReviews(r: Partial<ReviewRequirements>): void {
+		this.reviewRules = { ...this.reviewRules, ...r };
+	}
+
+	openConversation(number: number): void {
+		this.pull(number).conversations.push(false);
+	}
+
+	resolveConversations(number: number): void {
+		const p = this.pull(number);
+		p.conversations = p.conversations.map(() => true);
+	}
+
+	approve(number: number, reviewer: string): void {
+		this.pull(number).approvers.add(reviewer);
 	}
 
 	pushToBase(changes: Changes): void {
@@ -286,6 +311,10 @@ export class FakeGitHub {
 					expires_at: iso(this.now + 3600),
 				});
 			}
+			if (path === "/graphql" && req.method === "POST") {
+				this.requests.push("POST /graphql");
+				return this.graphql(body);
+			}
 			const prefix = `/repos/${FULL_NAME}`;
 			if (!path.startsWith(prefix)) throw new HttpError(404, "Not Found");
 			const rest = path.slice(prefix.length) || "/";
@@ -381,6 +410,25 @@ export class FakeGitHub {
 		}
 
 		// Pull requests
+		if (method === "GET" && match(/^\/rules\/branches\/(.+)$/)) {
+			const r = this.reviewRules;
+			const rules =
+				m?.[1] === "main" && (r.resolvedConversations || r.approvals > 0)
+					? [
+							{
+								type: "pull_request",
+								parameters: {
+									required_approving_review_count: r.approvals,
+									required_review_thread_resolution: r.resolvedConversations,
+									dismiss_stale_reviews_on_push: false,
+									require_code_owner_review: false,
+									require_last_push_approval: false,
+								},
+							},
+						]
+					: [];
+			return page(url, [{ type: "deletion" }, ...rules]);
+		}
 		if (method === "GET" && path === "/pulls") {
 			const open = [...this.pulls.values()]
 				.filter((p) => p.state === "open" && (!q.get("base") || q.get("base") === "main"))
@@ -770,6 +818,41 @@ export class FakeGitHub {
 		const sha = this.refs.get("main");
 		if (!sha) throw new Error("fake: no main branch");
 		return sha;
+	}
+
+	/** Only the adapter's review query; anything else is a test bug. */
+	private graphql(body: Json): Response {
+		const query = String(body.query ?? "");
+		const v = (body.variables ?? {}) as Record<string, unknown>;
+		if (!query.includes("query MergeQueueReviews")) {
+			throw new HttpError(400, "fake GitHub only answers the MergeQueueReviews query");
+		}
+		if (v.owner !== FAKE_OWNER || v.repo !== FAKE_REPO) {
+			return json(200, { data: { repository: null } });
+		}
+		const open = [...this.pulls.values()]
+			.filter((p) => p.state === "open" && v.base === "main")
+			.sort((a, b) => a.number - b.number);
+		// Pages of one, so the adapter's pagination is exercised.
+		const start = typeof v.after === "string" ? Number(v.after) : 0;
+		const slice = open.slice(start, start + 1);
+		const next = start + 1 < open.length;
+		return json(200, {
+			data: {
+				repository: {
+					pullRequests: {
+						pageInfo: { hasNextPage: next, endCursor: next ? String(start + 1) : null },
+						nodes: slice.map((p) => ({
+							number: p.number,
+							reviewThreads: { nodes: p.conversations.map((isResolved) => ({ isResolved })) },
+							latestOpinionatedReviews: {
+								nodes: [...p.approvers].map(() => ({ state: "APPROVED" })),
+							},
+						})),
+					},
+				},
+			},
+		});
 	}
 
 	private pull(number: number): FakePull {

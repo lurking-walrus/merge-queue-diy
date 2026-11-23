@@ -51,7 +51,7 @@ export async function reconcile(
 	};
 
 	for (let pass = 0; pass < MAX_PASSES; pass++) {
-		const { baseSha, pulls } = await port.readQueue(config);
+		const { baseSha, pulls, reviewRequirements } = await port.readQueue(config);
 		const testing = state.batch?.status === "testing" ? state.batch.sha : null;
 		const batchChecks = testing ? await port.readChecks(testing, config.requiredChecks) : null;
 
@@ -61,6 +61,7 @@ export async function reconcile(
 			baseBranch: port.baseBranch,
 			baseSha,
 			pulls,
+			reviewRequirements,
 			state,
 			batchChecks,
 		});

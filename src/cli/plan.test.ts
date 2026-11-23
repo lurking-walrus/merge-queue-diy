@@ -86,7 +86,37 @@ describe("queue:plan", () => {
 		await expect(
 			kit.rest.git.deleteRef({ owner: FAKE_OWNER, repo: FAKE_REPO, ref: "heads/main" }),
 		).rejects.toThrow(/refusing to send DELETE/);
+		await expect(
+			kit.graphql(
+				'mutation { resolveReviewThread(input: { threadId: "x" }) { clientMutationId } }',
+			),
+		).rejects.toThrow(/refusing to send POST/);
 		expect(fake.requests).toEqual([]);
 		expect(fake.branchNames()).toEqual(["main"]);
+	});
+
+	it("follows the branch's review rules, reading them with a GraphQL query only", async () => {
+		const { fake, at } = setup("required_checks: [ci]\nsettle_seconds: 0\n");
+		fake.requireReviews({ resolvedConversations: true });
+		const discussed = fake.openPull({ "a.txt": "a" });
+		fake.openPull({ "b.txt": "b" });
+		fake.finishCi();
+		fake.openConversation(discussed);
+
+		const text = formatPlan(await plan({ ...at, now: fake.now }), at);
+
+		expect(text).toContain(
+			"review requirements (auto): conversations resolved (from the branch's rules)",
+		);
+		expect(text).toContain("1 unresolved conversation(s)");
+		expect(text).toContain(
+			"report #1: merge-queue = waiting — [shadow] waiting: 1 unresolved review conversation",
+		);
+		expect(text).toContain("[shadow] would be queued (#1 of 1)");
+		// The fake pages one PR per query: two open PRs, two reads, nothing else.
+		expect(fake.requests.filter((r) => !r.startsWith("GET "))).toEqual([
+			"POST /graphql",
+			"POST /graphql",
+		]);
 	});
 });
