@@ -388,3 +388,26 @@ describe("reconcile handler", () => {
 		expect(new Set(w.sent.map((m) => m.id))).toEqual(new Set([`sweep:${w.fake.now}`]));
 	});
 });
+
+describe("linked secrets", () => {
+	it("prefers a linked sst.Secret and falls back to the environment when unlinked", async () => {
+		const { withLinkedSecrets } = await import("./secrets");
+		const env = { GITHUB_WEBHOOK_SECRET: "from-env", OTHER: "kept" };
+		expect(
+			withLinkedSecrets({ GITHUB_WEBHOOK_SECRET: "GithubWebhookSecret" }, env, {
+				GithubWebhookSecret: { value: "from-sst" },
+			}),
+		).toEqual({ GITHUB_WEBHOOK_SECRET: "from-sst", OTHER: "kept" });
+		const unlinked = new Proxy(
+			{},
+			{
+				get: () => {
+					throw new Error("not linked");
+				},
+			},
+		);
+		expect(
+			withLinkedSecrets({ GITHUB_WEBHOOK_SECRET: "GithubWebhookSecret" }, env, unlinked),
+		).toEqual(env);
+	});
+});

@@ -14,9 +14,9 @@ jobs:
     # merge is made by a real identity and push workflows run on main.
     uses: kornsour/gh-automation/.github/workflows/dependabot-auto-merge.yml@b3c9725939d515a545219990f226bcfb1b754af6 # v1.1.0
     with:
-      # No push-triggered deploy or publish workflow exists in this repository,
-      # so a merge made with GITHUB_TOKEN loses nothing. Set this back to true
-      # (and add the AUTOMERGE_TOKEN secret) when a deploy-on-push workflow lands.
-      require-token: false
+      # deploy.yml deploys on every push to main, and a merge made with
+      # GITHUB_TOKEN would not trigger it. Without AUTOMERGE_TOKEN (a Dependabot
+      # secret), fail and leave the PR for a hand merge instead.
+      require-token: true
     secrets:
       AUTOMERGE_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}

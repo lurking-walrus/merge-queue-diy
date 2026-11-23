@@ -41,9 +41,10 @@ on, finds conflicts before spending CI on them, and never updates a PR branch.
 | Webhook signature check and event routing | implemented, tested |
 | GitHub REST adapter (`src/github`) | implemented, tested against an HTTP-level fake GitHub; never run against live GitHub |
 | DynamoDB store and Lambda handlers (`src/store`, `src/handlers`) | implemented, tested against mocked AWS clients; never run on AWS |
-| SST config and deploy workflow | not written yet |
+| SST config and deploy workflow | written and type-checked; never deployed |
 
-It cannot be deployed yet, and nothing has run against live GitHub or AWS.
+Nothing has run against live GitHub or AWS. To deploy your own, follow
+[`docs/setup/`](./docs/setup/README.md).
 
 ## Develop
 

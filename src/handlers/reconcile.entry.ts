@@ -12,11 +12,14 @@ import { repositoryOctokit } from "../github/octokit";
 import { DynamoQueueTable } from "../store/dynamo";
 import { SchedulerWaker, SqsOutbox } from "./aws";
 import { createReconcileHandler, type ReconcileDeps, sweep } from "./reconcile";
+import { withLinkedSecrets } from "./secrets";
 
 let deps: ReconcileDeps | undefined;
 
 function build(): ReconcileDeps {
-	const env = loadReconcileEnv();
+	const env = loadReconcileEnv(
+		withLinkedSecrets({ GITHUB_APP_PRIVATE_KEY: "GithubAppPrivateKey" }),
+	);
 	const now = () => Math.floor(Date.now() / 1000);
 	const outbox = new SqsOutbox(new SQSClient({}), env.queueUrl);
 	return {
