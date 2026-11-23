@@ -66,7 +66,7 @@ ideally with required reviewers, then add:
 | --- | --- | --- |
 | `AWS_DEPLOY_ROLE_ARN` | **repository** variable | the role above. It has to be a repository variable: the workflow's job-level `if` cannot see environment variables. |
 | `AWS_REGION` | `production` variable | `<AWS_REGION>` |
-| `GITHUB_APP_ID` | `production` variable | from [github-app.md](./github-app.md) |
+| `MERGE_QUEUE_APP_ID` | `production` variable | from [github-app.md](./github-app.md). GitHub rejects variable names starting with `GITHUB_`; the workflow passes it to SST as `GITHUB_APP_ID`. |
 | `MERGE_QUEUE_ALLOWED_OWNERS` | `production` variable | `<ORG>`, comma-separated if several |
 | `RESOURCE_OWNER` | `production` variable | optional; the `Owner` tag |
 | `MERGE_QUEUE_ROLE_BOUNDARY_ARN` | `production` variable | optional; a permissions boundary for every role the stack creates |

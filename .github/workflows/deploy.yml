@@ -14,7 +14,9 @@ name: Deploy
 #                                environment's own variables are available.
 # and, on the `production` environment (or the repository):
 #   AWS_REGION                   region to deploy into
-#   GITHUB_APP_ID                numeric id of your GitHub App
+#   MERGE_QUEUE_APP_ID           numeric id of your GitHub App (passed to SST as
+#                                GITHUB_APP_ID; Actions variable names may not
+#                                start with GITHUB_)
 #   MERGE_QUEUE_ALLOWED_OWNERS   comma-separated org/user logins to serve
 #   RESOURCE_OWNER               value for the Owner tag (optional)
 #   MERGE_QUEUE_ROLE_BOUNDARY_ARN  permissions boundary for every role the stack
@@ -70,7 +72,7 @@ jobs:
       - name: Deploy
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
-          GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
+          GITHUB_APP_ID: ${{ vars.MERGE_QUEUE_APP_ID }}
           MERGE_QUEUE_ALLOWED_OWNERS: ${{ vars.MERGE_QUEUE_ALLOWED_OWNERS }}
           RESOURCE_OWNER: ${{ vars.RESOURCE_OWNER }}
           MERGE_QUEUE_ROLE_BOUNDARY_ARN: ${{ vars.MERGE_QUEUE_ROLE_BOUNDARY_ARN }}
