@@ -278,7 +278,9 @@ export function decide(snap: Snapshot): Step {
 		if (shadow && !report.summary.startsWith("[shadow]")) {
 			report.summary = `[shadow] ${report.summary}`;
 		}
-		const fingerprint = `${p.headSha}|${report.state}|${report.summary}`;
+		// The shadow flag is part of what was reported (it decides how the check
+		// is shown), so a report sent before it existed is sent once more.
+		const fingerprint = `${p.headSha}|${report.state}|${report.summary}|${shadow ? "shadow" : "enforce"}`;
 		if (st.reported[key] === fingerprint) continue;
 		st.reported[key] = fingerprint;
 		actions.push({ type: "report", number: p.number, headSha: p.headSha, ...report, shadow });

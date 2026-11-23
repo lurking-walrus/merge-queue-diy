@@ -208,3 +208,30 @@ describe("parseRepoConfig", () => {
 		expect(() => parseRepoConfig({ required_checks: [] })).toThrow();
 	});
 });
+
+describe("shadow reports", () => {
+	const shadowCfg = parseRepoConfig({
+		mode: "shadow",
+		required_checks: ["ci"],
+		settle_seconds: 0,
+		max_wait_seconds: 0,
+	});
+
+	it("are flagged as shadow and sent once per change", () => {
+		const first = decide(snap({ config: shadowCfg, pulls: [pull(1)] }));
+		const report = first.actions.find((a) => a.type === "report");
+		expect(report).toMatchObject({ shadow: true, summary: "[shadow] would be queued (#1 of 1)" });
+
+		const again = decide(snap({ config: shadowCfg, pulls: [pull(1)], state: first.state }));
+		expect(again.actions.filter((a) => a.type === "report")).toEqual([]);
+	});
+
+	it("are sent again when the last one predates the shadow flag", () => {
+		const first = decide(snap({ config: shadowCfg, pulls: [pull(1)] }));
+		const legacy = structuredClone(first.state);
+		legacy.reported["1"] = "head-1|queued|[shadow] would be queued (#1 of 1)";
+
+		const step = decide(snap({ config: shadowCfg, pulls: [pull(1)], state: legacy }));
+		expect(step.actions.filter((a) => a.type === "report")).toMatchObject([{ shadow: true }]);
+	});
+});
