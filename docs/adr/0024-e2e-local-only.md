@@ -1,6 +1,6 @@
 # ADR-0024: Run Playwright E2E locally, never in GitHub Actions
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-08-17
 - Supersedes: [ADR-0017](./0017-e2e-in-ci-for-dependabot.md)
 

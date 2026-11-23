@@ -1,6 +1,6 @@
 # ADR-0011: Local Postgres in dev, Neon in prod, driver chosen by connection string
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-07-05
 
 ## Context

@@ -1,6 +1,6 @@
 # ADR-0019: New apps default to a subdomain of one shared zone
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-07-12
 
 ## Context

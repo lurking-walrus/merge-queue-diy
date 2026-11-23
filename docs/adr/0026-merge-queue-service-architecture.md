@@ -1,6 +1,6 @@
 # ADR-0026: Merge queue as an event-driven Lambda service, not a Next.js app
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-23
 
 ## Context
@@ -35,11 +35,12 @@ is installed on.
 
 - The template's web application — Next.js, better-auth, Stripe, Drizzle/Neon,
   the legal pages, the design system, Playwright and the render smoke — has no
-  role in this service. ADRs 0005, 0007, 0009, 0011–0017 and 0019–0022 will be
-  superseded when that scaffolding is removed; until then it remains in the
-  tree, unused.
-- `sst.config.ts` changes from one `sst.aws.Nextjs` to functions, a queue, a
-  table and a schedule. No CloudFront, certificate or DNS record is needed.
+  role in this service and is removed. This ADR supersedes 0005–0007, 0009,
+  0011–0016, 0019–0022 and 0024. Environment validation (0006) survives as a
+  plain Zod schema in `src/env.ts`, without the Next.js-specific wrapper.
+- The deploy configuration is rewritten rather than adapted: one
+  `sst.aws.Nextjs` becomes functions, a queue, a table and a schedule, with no
+  CloudFront, certificate or DNS record. ADR-0023's choice of SST stands.
 - Idle cost is zero and there is no server to patch, at the price of cold
   starts on the first webhook after a quiet period — irrelevant here, since
   ingest only has to acknowledge within GitHub's ten-second limit.

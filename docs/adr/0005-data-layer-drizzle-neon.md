@@ -1,6 +1,6 @@
 # ADR-0005: Use Drizzle ORM with Neon serverless Postgres
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-06-19
 
 ## Context

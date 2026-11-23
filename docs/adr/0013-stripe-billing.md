@@ -1,6 +1,6 @@
 # ADR-0013: Stripe subscription billing, feature-flagged by env
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-07-05
 
 ## Context

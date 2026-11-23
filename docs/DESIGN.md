@@ -1,6 +1,8 @@
 # Merge queue — design
 
-**Status:** proposed, nothing built or deployed.
+**Status:** the decision core, reconcile loop, simulator and webhook intake
+are implemented (`src/`). The GitHub adapter, store, Lambda handlers and SST
+configuration are not, so nothing is deployed.
 **Date:** 2026-11-23
 
 A GitHub App that lands pull requests through a batched, serialized queue, so
@@ -99,12 +101,16 @@ makes the service safe to run on at-least-once delivery.
 
 ```
 src/
-  core/        decide(), types, batch planning, bisection — pure, no imports from shell
-  github/      typed wrappers over the dozen endpoints used
-  store/       DynamoDB record + optimistic locking
-  handlers/    ingest.ts, reconcile.ts (Lambda entrypoints)
-  sim/         in-memory GitHub for tests
-sst.config.ts  functions, queue, table, schedule, secrets
+  core/         decide(), types, config schema — pure, imports nothing outside core
+  ports.ts      GitHubPort and QueueStore: the only way out of the core
+  reconcile.ts  read → decide → act loop
+  sim/          in-memory GitHub implementing GitHubPort, plus scenarios
+  ingest/       signature verification, event → poke routing
+  env.ts        deployment environment schema
+  github/       (planned) REST adapter implementing GitHubPort
+  store/        (planned) DynamoDB record + optimistic locking
+  handlers/     (planned) Lambda entrypoints
+sst.config.ts   (planned) functions, queue, table, schedule, secrets
 docs/
 ```
 
@@ -213,10 +219,11 @@ Agents are the main users, so every state change is machine-readable:
 
 - The `merge-queue` check run carries the state and a one-line reason.
 - An ejection posts **one** comment (edited in place on repeat) with a fenced
-  JSON block: `{"reason": "conflict" | "checks_failed" | "head_changed",
+  JSON block: `{"reason": "conflict" | "checks_failed" | "merge_failed",
   "conflicts_with": [..], "failed_checks": [..], "run_url": ".."}`.
-- `/queue`, `/dequeue`, `/queue status` comments; a `queue:jump` label moves a
-  PR to the front of the next batch.
+- `/queue` and `/dequeue` comments, accepted only from the repository's
+  owners, members and collaborators; a `queue:jump` label moves a PR to the
+  front of the next batch. `/queue unfreeze` resumes a frozen queue.
 
 An agent subscribed to its PR sees the ejection, fixes or rebases, pushes, and
 the PR re-enters on its own.
@@ -228,15 +235,20 @@ defaults can live in the org's `.github` repository:
 
 ```yaml
 enabled: true
-mode: enforce            # or: shadow (compute and report, never merge)
+mode: shadow             # shadow (default: report only, never merge) | enforce
 enqueue: auto            # auto | label | comment
 merge_method: squash     # squash | merge
-required_checks: [ci, lint]
+required_checks: [ci, lint]   # must pass on the batch commit; the only required key
+pr_checks: [ci, lint]    # must pass on a PR's own head; defaults to required_checks
 batch_size: 5
 settle_seconds: 120
 max_wait_seconds: 300    # ship a short batch rather than wait for a full one
 on_failure: bisect       # bisect | serial
 ```
+
+Unknown keys are rejected, so a typo cannot silently disable a setting. The
+fast path (§5) applies only when `pr_checks` covers every `required_checks`
+entry; with thinner PR-level CI a lone PR still gets a batch run.
 
 ## 10. Service configuration and secrets
 
