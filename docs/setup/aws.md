@@ -47,6 +47,16 @@ No long-lived AWS keys are used anywhere.
    roles), SSM Parameter Store, CloudWatch Logs, and S3 for SST's state
    bucket. Use an account (or a boundary within one) for this service only.
 
+   In an account shared with other applications, scope the role instead of
+   granting those services broadly: resources are tagged
+   `Application=merge-queue-diy`, and the three that a policy has to name are
+   named `merge-queue-diy-<stage>-wakeups`, `-wakeup-delivery` and `-sweep`.
+   If the role may only create roles that carry a permissions boundary, set
+   `MERGE_QUEUE_ROLE_BOUNDARY_ARN` and every role the stack creates gets it.
+   That boundary must still allow `iam:PassRole` on the `-wakeup-delivery`
+   role to `scheduler.amazonaws.com`: Reconcile passes it when it schedules a
+   wake-up.
+
 ## 2. GitHub settings on the repository that deploys
 
 Create an environment named **`production`** (Settings → Environments),
@@ -59,6 +69,7 @@ ideally with required reviewers, then add:
 | `GITHUB_APP_ID` | `production` variable | from [github-app.md](./github-app.md) |
 | `MERGE_QUEUE_ALLOWED_OWNERS` | `production` variable | `<ORG>`, comma-separated if several |
 | `RESOURCE_OWNER` | `production` variable | optional; the `Owner` tag |
+| `MERGE_QUEUE_ROLE_BOUNDARY_ARN` | `production` variable | optional; a permissions boundary for every role the stack creates |
 | `AUTOMERGE_TOKEN` | Actions **and** Dependabot secret | a fine-grained token (Contents, Pull requests, Workflows: read/write). The auto-merge workflows need it so a merge to `main` triggers the deploy. |
 
 ## 3. The two secrets

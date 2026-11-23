@@ -20,6 +20,14 @@
  *   GITHUB_APP_ID                numeric id of YOUR GitHub App
  *   MERGE_QUEUE_ALLOWED_OWNERS   comma-separated org/user logins to serve
  *   RESOURCE_OWNER               value of the Owner tag (optional)
+ *   MERGE_QUEUE_ROLE_BOUNDARY_ARN  permissions boundary put on EVERY IAM role this
+ *                                stack creates (optional). Set it when the
+ *                                deploy role may only create bounded roles.
+ *
+ * Resources a scoped deploy policy has to name are named here rather than
+ * left to generated names: `<app>-<stage>-wakeups` (schedule group),
+ * `<app>-<stage>-wakeup-delivery` (Scheduler's role) and `<app>-<stage>-sweep`
+ * (EventBridge rule). Everything else carries the `Application` tag below.
  *
  * Secrets are `sst.Secret`, set once per stage, and each is linked only to the
  * function that needs it (DESIGN.md §12):
@@ -72,6 +80,16 @@ export default $config({
 	async run() {
 		const appId = required("GITHUB_APP_ID");
 		const allowedOwners = required("MERGE_QUEUE_ALLOWED_OWNERS");
+		const prefix = `${$app.name}-${$app.stage}`;
+
+		// Registered before any resource, so it reaches the roles SST creates for
+		// each function as well as the one created below.
+		const boundary = process.env.MERGE_QUEUE_ROLE_BOUNDARY_ARN;
+		if (boundary) {
+			$transform(aws.iam.Role, (args) => {
+				args.permissionsBoundary = boundary;
+			});
+		}
 
 		// Every function SST creates gets bounded logs, small memory and arm64.
 		$transform(sst.aws.Function, (args) => {
@@ -111,10 +129,11 @@ export default $config({
 
 		/* ------------------------------- Wake-ups ------------------------------- */
 		const wakeups = new aws.scheduler.ScheduleGroup("Wakeups", {
-			name: `${$app.name}-${$app.stage}-wakeups`,
+			name: `${prefix}-wakeups`,
 		});
 		// The role EventBridge Scheduler assumes to deliver a wake-up to the queue.
 		const schedulerRole = new aws.iam.Role("WakeupDelivery", {
+			name: `${prefix}-wakeup-delivery`,
 			assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
 				Service: "scheduler.amazonaws.com",
 			}),
@@ -174,7 +193,10 @@ export default $config({
 
 		/* -------------------------------- Sweep --------------------------------- */
 		// Repairs anything a missed webhook left behind (DESIGN.md §4).
-		const sweep = new aws.cloudwatch.EventRule("Sweep", { scheduleExpression: "rate(10 minutes)" });
+		const sweep = new aws.cloudwatch.EventRule("Sweep", {
+			name: `${prefix}-sweep`,
+			scheduleExpression: "rate(10 minutes)",
+		});
 		new aws.cloudwatch.EventTarget("SweepTarget", { rule: sweep.name, arn: reconcile.arn });
 		new aws.lambda.Permission("SweepInvoke", {
 			action: "lambda:InvokeFunction",
