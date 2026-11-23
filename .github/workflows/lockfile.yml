@@ -1,0 +1,18 @@
+name: Lockfile
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    uses: kornsour/gh-automation/.github/workflows/lockfile-guard.yml@b3c9725939d515a545219990f226bcfb1b754af6 # v1.1.0
