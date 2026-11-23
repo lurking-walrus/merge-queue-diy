@@ -34,7 +34,8 @@ Subscribe to: **Pull request**, **Push**, **Check run**, **Check suite**,
 
 ## After creating it
 
-1. Note the numeric **App ID**. It becomes the `GITHUB_APP_ID` variable.
+1. Note the numeric **App ID**. It becomes the `MERGE_QUEUE_APP_ID` Actions variable
+   ([aws.md](./aws.md)), which the deploy passes to SST as `GITHUB_APP_ID`.
 2. **Generate a private key** and download the `.pem`. It becomes
    `sst secret set GithubAppPrivateKey`. Do not commit it; `*.pem` is
    git-ignored. Delete the local file once the secret is set.
