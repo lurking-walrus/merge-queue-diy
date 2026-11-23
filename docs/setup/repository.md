@@ -32,8 +32,9 @@ GITHUB_TOKEN=<a read-only token> pnpm queue:plan <ORG>/<REPO> main
 ```
 
 In shadow mode each open PR gets a `merge-queue` check such as
-`[shadow] would be queued (#2 of 5)`. Compare it with what actually merges
-for a while (DESIGN.md §13).
+`[shadow] would be queued (#2 of 5)`. It is always shown as finished and
+neutral (grey), never pending, because it only describes. Compare it with
+what actually merges for a while (DESIGN.md §13).
 
 ## 2. Let CI run on batch branches
 

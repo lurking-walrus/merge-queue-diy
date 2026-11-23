@@ -264,6 +264,20 @@ describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
 		expect(sim.branchNames()).toEqual(["main"]);
 		expect(sim.batchRuns()).toBe(0);
 		expect(sim.lastReport(a)?.summary).toBe("[shadow] would be queued (#1 of 2)");
+		// Informational only: shown as a finished, neutral check, never pending.
+		expect(sim.lastReport(a)?.shadow).toBe(true);
+	});
+
+	it("in shadow mode marks every report as shadow, waiting ones included", async () => {
+		const { sim, port, store, cfg } = setup(config({ mode: "shadow" }), () => ({ ci: "failure" }));
+		const a = sim.openPull({ "a.txt": "a" });
+		sim.finishCi();
+
+		await drive(sim, port, store, cfg);
+
+		expect(sim.lastReport(a)?.summary).toBe("[shadow] waiting: own checks failing (ci)");
+		expect(sim.lastReport(a)?.shadow).toBe(true);
+		expect(sim.pullState(a)).toBe("open");
 	});
 
 	it("lands a whole batch as one fast-forward in merge mode", async () => {

@@ -415,7 +415,7 @@ describe("simple effects", () => {
 		const pr = fake.openPull({ "a.txt": "a" });
 		const headSha = fake.headOf(pr);
 		const report = (state: ActionOf<"report">["state"], summary: string) =>
-			gh.report({ type: "report", number: pr, headSha, state, summary });
+			gh.report({ type: "report", number: pr, headSha, state, summary, shadow: false });
 
 		await report("waiting", "waiting for own checks");
 		await report("queued", "queued (#1 of 1)");
@@ -440,6 +440,44 @@ describe("simple effects", () => {
 			status: "completed",
 			conclusion: "neutral",
 		});
+	});
+
+	it("shows shadow reports as finished, neutral checks, updated in place", async () => {
+		const { fake, gh } = world();
+		const pr = fake.openPull({ "a.txt": "a" });
+		const headSha = fake.headOf(pr);
+		const report = (state: ActionOf<"report">["state"], summary: string) =>
+			gh.report({ type: "report", number: pr, headSha, state, summary, shadow: true });
+
+		await report("waiting", "[shadow] waiting for own checks");
+		expect(fake.queueChecks(headSha)).toHaveLength(1);
+		expect(fake.queueChecks(headSha)[0]).toMatchObject({
+			status: "completed",
+			conclusion: "neutral",
+			output: { title: "[shadow] waiting for own checks" },
+		});
+
+		await report("queued", "[shadow] would be queued (#1 of 1)");
+		await report("queued", "[shadow] would be queued (#1 of 1)");
+		expect(fake.queueChecks(headSha)).toHaveLength(1);
+		expect(fake.queueChecks(headSha)[0]).toMatchObject({
+			status: "completed",
+			conclusion: "neutral",
+			external_id: "queued",
+			output: { title: "[shadow] would be queued (#1 of 1)" },
+		});
+
+		// Switching to enforce opens a new run: a finished one cannot be reopened.
+		await gh.report({
+			type: "report",
+			number: pr,
+			headSha,
+			state: "queued",
+			summary: "queued (#1 of 1)",
+			shadow: false,
+		});
+		expect(fake.queueChecks(headSha)).toHaveLength(2);
+		expect(fake.queueChecks(headSha).at(-1)).toMatchObject({ status: "in_progress" });
 	});
 
 	it("posts one ejection comment per PR and edits it in place on repeat", async () => {
