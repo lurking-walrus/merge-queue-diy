@@ -42,6 +42,7 @@ on, finds conflicts before spending CI on them, and never updates a PR branch.
 | GitHub REST adapter (`src/github`) | implemented, tested against an HTTP-level fake GitHub; never run against live GitHub |
 | DynamoDB store and Lambda handlers (`src/store`, `src/handlers`) | implemented, tested against mocked AWS clients; never run on AWS |
 | SST config and deploy workflow | written and type-checked; never deployed |
+| Dry-run CLI (`pnpm queue:plan`) and structured logs | implemented, tested; the CLI's read path has run against live GitHub |
 
 Nothing has run against live GitHub or AWS. To deploy your own, follow
 [`docs/setup/`](./docs/setup/README.md).
@@ -53,6 +54,9 @@ corepack enable && pnpm install
 pnpm check      # Biome
 pnpm typecheck  # tsc
 pnpm test       # Vitest — includes the simulator scenarios
+
+# Read-only dry run against a real repository: prints what the queue would do.
+GITHUB_TOKEN=$(gh auth token) pnpm queue:plan <owner>/<repo> main --enforce
 ```
 
 The scenarios in [`src/sim/scenarios.test.ts`](./src/sim/scenarios.test.ts) are

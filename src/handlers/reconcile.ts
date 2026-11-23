@@ -20,6 +20,7 @@ import type { Kit } from "../github/octokit";
 import type { QueueStore } from "../ports";
 import { reconcile } from "../reconcile";
 import { type QueueKey, type StoredQueue, VersionConflict } from "../store/dynamo";
+import { reconcileLogLine } from "./log";
 import type { Outbox, QueueMessage, Waker } from "./messages";
 
 /** A version conflict means a concurrent attempt; re-running a couple of times settles it. */
@@ -48,6 +49,9 @@ export interface Outcome {
 	kind: "reconciled" | "fanned-out" | "disabled" | "invalid-config" | "not-allowed";
 	wakeAfterSeconds?: number | null;
 	bases?: string[];
+	/** Effects executed, by type. */
+	actions?: Partial<Record<string, number>>;
+	batchId?: number | null;
 }
 
 export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promise<Outcome> {
@@ -76,14 +80,19 @@ export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promi
 		const store = deps.table.queue(key, m.installationId);
 		try {
 			if (m.command) await applyStoredCommand(store, m.command);
-			const { wakeAfterSeconds } = await reconcile(port, store, config.config, deps.now());
+			const { wakeAfterSeconds, actions, batchId } = await reconcile(
+				port,
+				store,
+				config.config,
+				deps.now(),
+			);
 			if (wakeAfterSeconds !== null) {
 				await deps.waker.wakeAt(
 					{ ...m, command: undefined, id: `wake:${deps.now() + wakeAfterSeconds}` },
 					deps.now() + wakeAfterSeconds,
 				);
 			}
-			return { kind: "reconciled", wakeAfterSeconds };
+			return { kind: "reconciled", wakeAfterSeconds, actions, batchId };
 		} catch (e) {
 			// Someone else wrote this queue meanwhile: reload and decide again, never overwrite.
 			if (e instanceof VersionConflict && attempt < MAX_ATTEMPTS) continue;
@@ -167,8 +176,10 @@ export function createReconcileHandler(deps: ReconcileDeps) {
 				});
 				continue;
 			}
+			const started = performance.now();
 			try {
-				await handleMessage(deps, m);
+				const outcome = await handleMessage(deps, m);
+				deps.log({ ...reconcileLogLine(m, outcome, performance.now() - started) });
 			} catch (e) {
 				deps.log({
 					level: "error",
@@ -177,6 +188,7 @@ export function createReconcileHandler(deps: ReconcileDeps) {
 					base: m.base,
 					error: e instanceof Error ? e.name : "unknown",
 					status: typeof e === "object" && e !== null && "status" in e ? e.status : undefined,
+					durationMs: Math.round(performance.now() - started),
 				});
 				failures.push({ itemIdentifier: record.messageId });
 			}

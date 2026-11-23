@@ -109,7 +109,8 @@ src/
   env.ts        deployment environment schema
   github/       REST adapter implementing GitHubPort, config loader, HTTP fake for tests
   store/        DynamoDB record + optimistic locking
-  handlers/     Lambda entrypoints; wake-ups and fan-out per ADR-0027
+  handlers/     Lambda entrypoints; wake-ups and fan-out per ADR-0027; one log line per message
+  cli/          `queue:plan`, the read-only dry run
 sst.config.ts   functions, queue, table, schedules, secrets
 docs/
 ```

@@ -15,7 +15,8 @@
     "lint": "biome lint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "sst:check": "sst install && tsc -p tsconfig.sst.json"
+    "sst:check": "sst install && tsc -p tsconfig.sst.json",
+    "queue:plan": "tsx src/cli/plan.main.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1164.0",
@@ -33,6 +34,7 @@
     "@types/node": "^26",
     "aws-sdk-client-mock": "4.1.0",
     "msw": "3.0.7",
+    "tsx": "4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },

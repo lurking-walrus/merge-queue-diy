@@ -92,3 +92,12 @@ export function loadReconcileEnv(source: Source = process.env): ReconcileEnv {
 		scheduleGroup: e.MERGE_QUEUE_SCHEDULE_GROUP,
 	};
 }
+
+const cliSchema = z.object({
+	GITHUB_TOKEN: z.string().min(1, "set a read-only token (e.g. `gh auth token`)"),
+});
+
+/** The dry-run CLI (`pnpm queue:plan`): a token that can read the repository. Nothing else. */
+export function loadCliEnv(source: Source = process.env): { token: string } {
+	return { token: parse(cliSchema, source).GITHUB_TOKEN };
+}
