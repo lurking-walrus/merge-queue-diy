@@ -44,7 +44,7 @@ export interface CiRun {
 	kind: "pr" | "batch";
 }
 
-function apply(tree: Tree, changes: Changes): Tree {
+export function apply(tree: Tree, changes: Changes): Tree {
 	const next = { ...tree };
 	for (const [path, content] of Object.entries(changes)) {
 		if (content === null) delete next[path];
@@ -53,7 +53,7 @@ function apply(tree: Tree, changes: Changes): Tree {
 	return next;
 }
 
-function treeId(tree: Tree): string {
+export function treeId(tree: Tree): string {
 	const sorted = Object.keys(tree)
 		.sort()
 		.map((k) => [k, tree[k]]);
@@ -61,7 +61,7 @@ function treeId(tree: Tree): string {
 }
 
 /** Per-path three-way merge. Returns null when both sides changed a path differently. */
-function merge3(ancestor: Tree, ours: Tree, theirs: Tree): Tree | null {
+export function merge3(ancestor: Tree, ours: Tree, theirs: Tree): Tree | null {
 	const out: Tree = {};
 	for (const path of new Set([...Object.keys(ours), ...Object.keys(theirs)])) {
 		const a = ancestor[path];

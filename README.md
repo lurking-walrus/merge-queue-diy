@@ -39,7 +39,8 @@ on, finds conflicts before spending CI on them, and never updates a PR branch.
 | Reconcile loop and ports | implemented, tested against the simulator |
 | In-memory GitHub simulator and end-to-end scenarios | implemented |
 | Webhook signature check and event routing | implemented, tested |
-| GitHub REST adapter, DynamoDB store, Lambda handlers, SST config | not written yet |
+| GitHub REST adapter (`src/github`) | implemented, tested against an HTTP-level fake GitHub; never run against live GitHub |
+| DynamoDB store, Lambda handlers, SST config | not written yet |
 
 It cannot be deployed yet, and nothing has run against live GitHub or AWS.
 

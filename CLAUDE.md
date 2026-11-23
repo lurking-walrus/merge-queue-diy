@@ -21,9 +21,11 @@ variables or `sst.Secret`s; docs and tests use placeholders such as
 | `src/sim/` | In-memory GitHub implementing `GitHubPort`, plus end-to-end scenarios | implemented |
 | `src/ingest/` | Webhook signature check and event → poke routing | implemented, tested |
 | `src/env.ts` | Deployment environment schema | implemented, tested |
-| GitHub REST adapter, DynamoDB store, Lambda handlers, `sst.config.ts` | — | **not written yet** |
+| `src/github/` | REST adapter implementing `GitHubPort` (`adapter.ts`), config loader, Octokit auth; `fake.ts` is an HTTP-level fake GitHub for tests | implemented, tested against the fake |
+| DynamoDB store, Lambda handlers, `sst.config.ts` | — | **not written yet** |
 
-Nothing has run against live GitHub or AWS.
+Nothing has run against live GitHub or AWS. The adapter is tested only
+against `src/github/fake.ts` over intercepted HTTP (msw).
 
 ## Rules that keep this correct
 
@@ -37,7 +39,9 @@ Nothing has run against live GitHub or AWS.
 - **The landed tree must equal the tested tree.** If it does not, the queue
   freezes. Never weaken that check to make something pass.
 - **New behaviour gets a scenario** in `src/sim/scenarios.test.ts` driving the
-  real `reconcile` loop, not only a unit test of `decide`.
+  real `reconcile` loop, not only a unit test of `decide`. Every scenario runs
+  twice — against the simulator and against the REST adapter over HTTP — so a
+  change to either must keep both passing.
 - Fork pull requests are never queued; only OWNER/MEMBER/COLLABORATOR comments
   are commands. Both are security boundaries.
 

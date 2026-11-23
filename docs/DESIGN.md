@@ -1,8 +1,8 @@
 # Merge queue — design
 
-**Status:** the decision core, reconcile loop, simulator and webhook intake
-are implemented (`src/`). The GitHub adapter, store, Lambda handlers and SST
-configuration are not, so nothing is deployed.
+**Status:** the decision core, reconcile loop, simulator, webhook intake and
+GitHub REST adapter are implemented (`src/`). The store, Lambda handlers and
+SST configuration are not, so nothing is deployed.
 **Date:** 2026-11-23
 
 A GitHub App that lands pull requests through a batched, serialized queue, so
@@ -107,7 +107,7 @@ src/
   sim/          in-memory GitHub implementing GitHubPort, plus scenarios
   ingest/       signature verification, event → poke routing
   env.ts        deployment environment schema
-  github/       (planned) REST adapter implementing GitHubPort
+  github/       REST adapter implementing GitHubPort, config loader, HTTP fake for tests
   store/        (planned) DynamoDB record + optimistic locking
   handlers/     (planned) Lambda entrypoints
 sst.config.ts   (planned) functions, queue, table, schedule, secrets
