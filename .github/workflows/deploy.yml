@@ -17,6 +17,8 @@ name: Deploy
 #   GITHUB_APP_ID                numeric id of your GitHub App
 #   MERGE_QUEUE_ALLOWED_OWNERS   comma-separated org/user logins to serve
 #   RESOURCE_OWNER               value for the Owner tag (optional)
+#   MERGE_QUEUE_ROLE_BOUNDARY_ARN  permissions boundary for every role the stack
+#                                creates (optional; see sst.config.ts)
 # The two secrets are `sst secret set` values in AWS, not GitHub secrets.
 
 on:
@@ -71,4 +73,5 @@ jobs:
           GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
           MERGE_QUEUE_ALLOWED_OWNERS: ${{ vars.MERGE_QUEUE_ALLOWED_OWNERS }}
           RESOURCE_OWNER: ${{ vars.RESOURCE_OWNER }}
+          MERGE_QUEUE_ROLE_BOUNDARY_ARN: ${{ vars.MERGE_QUEUE_ROLE_BOUNDARY_ARN }}
         run: pnpm sst deploy --stage production
