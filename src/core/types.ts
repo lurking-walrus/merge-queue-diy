@@ -138,7 +138,15 @@ export type Action =
 	  }
 	| { type: "deleteBranch"; branch: string }
 	| { type: "cancelRuns"; sha: string }
-	| { type: "report"; number: number; headSha: string; state: ReportState; summary: string }
+	| {
+			type: "report";
+			number: number;
+			headSha: string;
+			state: ReportState;
+			summary: string;
+			/** Shadow mode: informational only, so the check is shown as finished. */
+			shadow: boolean;
+	  }
 	| { type: "comment"; number: number; payload: EjectionPayload }
 	| { type: "openIssue"; title: string; body: string };
 

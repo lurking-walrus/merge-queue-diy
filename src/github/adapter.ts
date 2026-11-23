@@ -53,10 +53,16 @@ function epochSeconds(iso: string | null | undefined): number {
 	return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
 }
 
-function reportCheck(state: ReportState): {
+function reportCheck(
+	state: ReportState,
+	shadow: boolean,
+): {
 	status: "in_progress" | "completed";
 	conclusion?: string;
 } {
+	// Shadow mode only describes what the queue would do. A check left in
+	// progress looks like stuck CI on every PR, so it is shown as finished.
+	if (shadow) return { status: "completed", conclusion: "neutral" };
 	if (state === "ejected") return { status: "completed", conclusion: "failure" };
 	if (state === "held") return { status: "completed", conclusion: "neutral" };
 	return { status: "in_progress" };
@@ -479,7 +485,7 @@ export class RestGitHub implements GitHubPort {
 	}
 
 	async report(a: ActionOf<"report">): Promise<void> {
-		await this.upsertCheck(a.headSha, a.state, a.summary, reportCheck(a.state));
+		await this.upsertCheck(a.headSha, a.state, a.summary, reportCheck(a.state, a.shadow));
 	}
 
 	async comment(a: ActionOf<"comment">): Promise<void> {
@@ -554,7 +560,8 @@ export class RestGitHub implements GitHubPort {
 		if (
 			mine?.output?.title === title &&
 			mine.external_id === state &&
-			mine.status === check.status
+			mine.status === check.status &&
+			(mine.conclusion ?? undefined) === check.conclusion
 		) {
 			return;
 		}

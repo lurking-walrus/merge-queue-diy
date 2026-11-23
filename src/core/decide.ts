@@ -273,10 +273,15 @@ export function decide(snap: Snapshot): Step {
 			delete st.reported[key];
 			continue;
 		}
+		const shadow = cfg.mode === "shadow";
+		// Every shadow report says so, not only "would be queued".
+		if (shadow && !report.summary.startsWith("[shadow]")) {
+			report.summary = `[shadow] ${report.summary}`;
+		}
 		const fingerprint = `${p.headSha}|${report.state}|${report.summary}`;
 		if (st.reported[key] === fingerprint) continue;
 		st.reported[key] = fingerprint;
-		actions.push({ type: "report", number: p.number, headSha: p.headSha, ...report });
+		actions.push({ type: "report", number: p.number, headSha: p.headSha, ...report, shadow });
 	}
 
 	return { state: st, actions, wakeAfterSeconds: wake };

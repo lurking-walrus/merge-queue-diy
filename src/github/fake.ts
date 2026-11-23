@@ -607,6 +607,11 @@ export class FakeGitHub {
 					headSha: run.head_sha,
 					state: run.external_id as ReportState,
 					summary: run.output.title ?? "",
+					// Only what GitHub would show: a finished, neutral [shadow] check.
+					shadow:
+						run.status === "completed" &&
+						run.conclusion === "neutral" &&
+						(run.output.title ?? "").startsWith("[shadow]"),
 				});
 			}
 		}
