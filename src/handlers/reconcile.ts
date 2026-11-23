@@ -13,7 +13,7 @@
 
 import type { SQSBatchResponse, SQSEvent } from "aws-lambda";
 import { applyCommand } from "../core/decide";
-import type { Command, QueueState } from "../core/types";
+import { type Command, isIdle, type QueueState } from "../core/types";
 import { RestGitHub } from "../github/adapter";
 import { loadRepoConfig } from "../github/config";
 import type { Kit } from "../github/octokit";
@@ -46,7 +46,7 @@ export interface ReconcileDeps {
 }
 
 export interface Outcome {
-	kind: "reconciled" | "fanned-out" | "disabled" | "invalid-config" | "not-allowed";
+	kind: "reconciled" | "fanned-out" | "idle" | "disabled" | "invalid-config" | "not-allowed";
 	wakeAfterSeconds?: number | null;
 	bases?: string[];
 	/** Effects executed, by type. */
@@ -61,6 +61,28 @@ export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promi
 	if (m.base === null) return fanOut(deps, kit, m);
 
 	const base = m.base;
+	const key = { owner: m.owner, repo: m.repo, base };
+
+	// Most pokes name a branch no queue lives on: every push to every branch
+	// is one. With nothing stored and no open PR targeting it, one cheap read
+	// settles it, and a stale stored queue for it is forgotten.
+	if (!m.command) {
+		const store = deps.table.queue(key, m.installationId);
+		if (isIdle(await store.load())) {
+			const { data: open } = await kit.rest.pulls.list({
+				owner: m.owner,
+				repo: m.repo,
+				state: "open",
+				base,
+				per_page: 1,
+			});
+			if (open.length === 0) {
+				await store.discard();
+				return { kind: "idle" };
+			}
+		}
+	}
+
 	const config = await loadRepoConfig(kit, m.owner, m.repo);
 	if (config.kind === "missing") return { kind: "disabled" };
 	const port = new RestGitHub({
@@ -75,7 +97,6 @@ export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promi
 		return { kind: "invalid-config" };
 	}
 
-	const key = { owner: m.owner, repo: m.repo, base };
 	for (let attempt = 1; ; attempt++) {
 		const store = deps.table.queue(key, m.installationId);
 		try {

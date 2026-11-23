@@ -55,4 +55,6 @@ export interface QueueRead {
 export interface QueueStore {
 	load(): Promise<QueueState>;
 	save(state: QueueState): Promise<void>;
+	/** Forget the queue: the next `load` returns an empty state. Safe to repeat. */
+	discard(): Promise<void>;
 }

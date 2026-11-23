@@ -16,6 +16,7 @@
 
 import { ConditionalCheckFailedException, type DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
+	DeleteCommand,
 	DynamoDBDocumentClient,
 	GetCommand,
 	PutCommand,
@@ -164,5 +165,24 @@ export class DynamoQueueStore implements QueueStore {
 			throw e;
 		}
 		this.version = next;
+	}
+
+	async discard(): Promise<void> {
+		if (this.version === null) throw new Error("DynamoQueueStore.discard called before load");
+		if (this.version === 0) return;
+		try {
+			await this.doc.send(
+				new DeleteCommand({
+					TableName: this.tableName,
+					Key: this.itemKey,
+					ConditionExpression: "version = :expected",
+					ExpressionAttributeValues: { ":expected": this.version },
+				}),
+			);
+		} catch (e) {
+			if (e instanceof ConditionalCheckFailedException) throw new VersionConflict(this.key);
+			throw e;
+		}
+		this.version = 0;
 	}
 }

@@ -121,6 +121,27 @@ export function emptyState(): QueueState {
 	};
 }
 
+/**
+ * True when a queue holds nothing worth keeping: no PRs, no batch, no
+ * commands, no freeze, and it has never built a batch (so batch ids and
+ * branch names cannot be reused). Such a queue is forgotten, not stored: a
+ * repository with hundreds of branches would otherwise accumulate one stored
+ * queue per branch ever pushed, and every check event fans out to all of them.
+ */
+export function isIdle(s: QueueState): boolean {
+	return (
+		s.entries.length === 0 &&
+		s.batch === null &&
+		s.pending.length === 0 &&
+		Object.keys(s.ejected).length === 0 &&
+		s.requested.length === 0 &&
+		s.held.length === 0 &&
+		Object.keys(s.reported).length === 0 &&
+		s.frozen === null &&
+		s.nextBatchId === 1
+	);
+}
+
 export interface Snapshot {
 	/** Epoch seconds. */
 	now: number;

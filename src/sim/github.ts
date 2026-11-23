@@ -368,5 +368,14 @@ export class MemoryStore implements QueueStore {
 
 	async save(state: QueueState): Promise<void> {
 		this.state = structuredClone(state);
+		this.stored = true;
 	}
+
+	async discard(): Promise<void> {
+		this.state = emptyState();
+		this.stored = false;
+	}
+
+	/** Whether a queue is being kept at all (false once discarded as idle). */
+	stored = false;
 }
