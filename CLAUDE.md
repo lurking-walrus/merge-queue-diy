@@ -24,7 +24,8 @@ variables or `sst.Secret`s; docs and tests use placeholders such as
 | `src/github/` | REST adapter implementing `GitHubPort` (`adapter.ts`), config loader, Octokit auth; `fake.ts` is an HTTP-level fake GitHub for tests | implemented, tested against the fake |
 | `src/store/` | DynamoDB `QueueStore`, one item per queue, version-conditional writes | implemented, tested against a mocked client |
 | `src/handlers/` | Lambda handlers: ingest (Function URL), reconcile (SQS FIFO + sweep), wake-ups via EventBridge Scheduler ([ADR-0027](./docs/adr/0027-wake-ups-and-queue-fan-out.md)) | implemented, tested |
-| `sst.config.ts`, deploy workflow | — | **not written yet** |
+| `sst.config.ts`, `.github/workflows/deploy.yml` | SST v4 stack and OIDC deploy on push to `main`; skipped until `AWS_DEPLOY_ROLE_ARN` is set | written, type-checked with `pnpm sst:check`; **never deployed** |
+| `docs/setup/` | What a human does to go live: App registration, AWS/OIDC, secrets, per-repo config, ruleset | written |
 
 Nothing has run against live GitHub or AWS. The adapter is tested only
 against `src/github/fake.ts` over intercepted HTTP (msw); the AWS clients only
@@ -57,6 +58,7 @@ against `aws-sdk-client-mock`.
 pnpm check[:fix]   # Biome lint + format
 pnpm typecheck     # tsc --noEmit (also what `pnpm build` runs for now)
 pnpm test          # Vitest
+AWS_REGION=<AWS_REGION> pnpm sst:check   # evaluate + type-check sst.config.ts (no AWS calls)
 ```
 
 A PreToolUse hook (`.claude/settings.json`) blocks `git commit` unless

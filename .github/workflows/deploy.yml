@@ -1,0 +1,74 @@
+name: Deploy
+
+# Deploys the merge queue to AWS with SST (sst.config.ts, ADR-0026) on every
+# push to main, using GitHub OIDC — there are no AWS access keys anywhere.
+#
+# Does nothing until a human sets it up (docs/setup/README.md): the job is
+# skipped while the AWS_DEPLOY_ROLE_ARN variable is unset. Every `uses:` is
+# pinned to a full commit SHA; this organization rejects unpinned actions.
+#
+# Variables:
+#   AWS_DEPLOY_ROLE_ARN          IAM role trusting this repo's OIDC tokens for the
+#                                `production` environment. A REPOSITORY variable:
+#                                the job-level `if` below is evaluated before the
+#                                environment's own variables are available.
+# and, on the `production` environment (or the repository):
+#   AWS_REGION                   region to deploy into
+#   GITHUB_APP_ID                numeric id of your GitHub App
+#   MERGE_QUEUE_ALLOWED_OWNERS   comma-separated org/user logins to serve
+#   RESOURCE_OWNER               value for the Owner tag (optional)
+# The two secrets are `sst secret set` values in AWS, not GitHub secrets.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Never cancel a deploy in flight: a half-applied update is worse than a
+# queued one. Successive pushes collapse into one pending deploy.
+concurrency:
+  group: ${{ github.workflow }}-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy (production)
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      # For the OIDC token exchange with AWS STS.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          GITHUB_APP_ID: ${{ vars.GITHUB_APP_ID }}
+          MERGE_QUEUE_ALLOWED_OWNERS: ${{ vars.MERGE_QUEUE_ALLOWED_OWNERS }}
+          RESOURCE_OWNER: ${{ vars.RESOURCE_OWNER }}
+        run: pnpm sst deploy --stage production

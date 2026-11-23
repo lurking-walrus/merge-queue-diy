@@ -1,8 +1,8 @@
 # Merge queue — design
 
 **Status:** the decision core, reconcile loop, simulator, webhook intake,
-GitHub REST adapter, DynamoDB store and Lambda handlers are implemented
-(`src/`). The SST configuration is not, so nothing is deployed.
+GitHub REST adapter, DynamoDB store, Lambda handlers and SST configuration
+are implemented. Nothing is deployed; see [`docs/setup/`](./setup/README.md).
 **Date:** 2026-11-23
 
 A GitHub App that lands pull requests through a batched, serialized queue, so
@@ -110,7 +110,7 @@ src/
   github/       REST adapter implementing GitHubPort, config loader, HTTP fake for tests
   store/        DynamoDB record + optimistic locking
   handlers/     Lambda entrypoints; wake-ups and fan-out per ADR-0027
-sst.config.ts   (planned) functions, queue, table, schedule, secrets
+sst.config.ts   functions, queue, table, schedules, secrets
 docs/
 ```
 
@@ -290,6 +290,7 @@ hosted instance.
 | Commit statuses | read | repos that report via statuses |
 | Actions | write | cancel superseded runs |
 | Workflows | write | without it, a batch containing a `.github/workflows/**` change cannot be pushed |
+| Issues | write | ejection comments and the "queue frozen" issue (both use the issues API) |
 | Metadata | read | mandatory |
 
 Events: `pull_request`, `push`, `check_run`, `check_suite`, `status`,
