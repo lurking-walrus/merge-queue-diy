@@ -29,8 +29,11 @@ the organization that owns the repositories, and set:
 
 ## Events
 
-Subscribe to: **Pull request**, **Push**, **Check run**, **Check suite**,
-**Status**, **Workflow run**, **Issue comment**, **Installation repositories**.
+Subscribe to: **Pull request**, **Push**, **Check run**, **Status**,
+**Issue comment**, **Installation repositories**. Only a check that *finished*
+pokes the queue (a completed check run other than its own, a status that is no
+longer pending); **Check suite** and **Workflow run** add nothing and can be
+left off.
 
 ## After creating it
 
