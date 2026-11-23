@@ -58,3 +58,4 @@ Each record uses a short [MADR](https://adr.github.io/madr/)-style template:
 | [0024](./0024-e2e-local-only.md) | Run Playwright E2E locally, never in GitHub Actions | Superseded by ADR-0026 |
 | [0025](./0025-typescript-7.md) | TypeScript 7 (native compiler) and its tsconfig conventions | Accepted |
 | [0026](./0026-merge-queue-service-architecture.md) | Merge queue as an event-driven Lambda service, not a Next.js app | Accepted |
+| [0027](./0027-wake-ups-and-queue-fan-out.md) | Wake-ups through EventBridge Scheduler; "every base" pokes are only fanned out | Accepted |

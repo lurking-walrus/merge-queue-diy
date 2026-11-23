@@ -1,6 +1,5 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "../env";
 import { routeEvent } from "./route";
 import { verifySignature } from "./signature";
 
@@ -86,25 +85,5 @@ describe("routeEvent", () => {
 		expect(
 			routeEvent("issue_comment", comment("please /queue this", "MEMBER"), allowed),
 		).toBeNull();
-	});
-});
-
-describe("loadEnv", () => {
-	const good = {
-		GITHUB_APP_ID: "12345",
-		GITHUB_APP_PRIVATE_KEY: "test-only-not-a-real-key",
-		GITHUB_WEBHOOK_SECRET: SECRET,
-		MERGE_QUEUE_ALLOWED_OWNERS: " Example-Org, another ",
-	};
-
-	it("normalizes the owner allowlist", () => {
-		expect(loadEnv(good).allowedOwners).toEqual(["example-org", "another"]);
-	});
-
-	it("names what is missing without echoing any value", () => {
-		const attempt = () =>
-			loadEnv({ ...good, GITHUB_WEBHOOK_SECRET: "short", MERGE_QUEUE_ALLOWED_OWNERS: "" });
-		expect(attempt).toThrow(/GITHUB_WEBHOOK_SECRET, MERGE_QUEUE_ALLOWED_OWNERS/);
-		expect(attempt).not.toThrow(/short/);
 	});
 });

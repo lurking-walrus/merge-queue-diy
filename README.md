@@ -40,7 +40,8 @@ on, finds conflicts before spending CI on them, and never updates a PR branch.
 | In-memory GitHub simulator and end-to-end scenarios | implemented |
 | Webhook signature check and event routing | implemented, tested |
 | GitHub REST adapter (`src/github`) | implemented, tested against an HTTP-level fake GitHub; never run against live GitHub |
-| DynamoDB store, Lambda handlers, SST config | not written yet |
+| DynamoDB store and Lambda handlers (`src/store`, `src/handlers`) | implemented, tested against mocked AWS clients; never run on AWS |
+| SST config and deploy workflow | not written yet |
 
 It cannot be deployed yet, and nothing has run against live GitHub or AWS.
 
