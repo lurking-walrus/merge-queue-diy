@@ -259,6 +259,8 @@ describe("reconcile handler", () => {
 		expect(await handleMessage(w.deps, w.poke())).toEqual({
 			kind: "reconciled",
 			wakeAfterSeconds: null,
+			batchId: 1,
+			actions: { build: 1, report: 2 },
 		});
 
 		expect(w.fake.branchNames()).toEqual(["main", "mq/main/1"]);
@@ -409,5 +411,58 @@ describe("linked secrets", () => {
 		expect(
 			withLinkedSecrets({ GITHUB_WEBHOOK_SECRET: "GithubWebhookSecret" }, env, unlinked),
 		).toEqual(env);
+	});
+});
+
+describe("structured logs", () => {
+	it("writes one line per reconciled message with repo, base, batch, actions and duration", async () => {
+		const w = reconcileWorld();
+		w.fake.openPull({ "a.txt": "a" });
+		w.fake.openPull({ "b.txt": "b" });
+		w.fake.finishCi();
+		const handler = createReconcileHandler(w.deps);
+
+		await handler({
+			Records: [{ messageId: "m1", body: JSON.stringify(w.poke()) } as SQSEvent["Records"][number]],
+		});
+
+		expect(w.logs).toHaveLength(1);
+		const line = w.logs[0] as Record<string, unknown>;
+		expect(line).toMatchObject({
+			level: "info",
+			msg: "reconcile",
+			repo: `${FAKE_OWNER}/${FAKE_REPO}`,
+			base: "main",
+			trigger: "webhook",
+			outcome: "reconciled",
+			batch: 1,
+			actions: { build: 1, report: 2 },
+			wakeAfterSeconds: null,
+		});
+		expect(typeof line.durationMs).toBe("number");
+		expect(Object.keys(line).sort()).toEqual(
+			[
+				"actions",
+				"base",
+				"batch",
+				"durationMs",
+				"level",
+				"msg",
+				"outcome",
+				"repo",
+				"trigger",
+				"wakeAfterSeconds",
+			].sort(),
+		);
+		const text = JSON.stringify(w.logs);
+		expect(text).not.toContain("test-token");
+		expect(text).not.toContain("delivery");
+	});
+
+	it("names only the kind of trigger, never its id", async () => {
+		const { triggerKind } = await import("./log");
+		expect(triggerKind("webhook:72d3162e-cc78>main")).toBe("webhook");
+		expect(triggerKind("sweep:123")).toBe("sweep");
+		expect(triggerKind("ghs_xxx")).toBe("unknown");
 	});
 });

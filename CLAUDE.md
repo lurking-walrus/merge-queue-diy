@@ -25,11 +25,15 @@ variables or `sst.Secret`s; docs and tests use placeholders such as
 | `src/store/` | DynamoDB `QueueStore`, one item per queue, version-conditional writes | implemented, tested against a mocked client |
 | `src/handlers/` | Lambda handlers: ingest (Function URL), reconcile (SQS FIFO + sweep), wake-ups via EventBridge Scheduler ([ADR-0027](./docs/adr/0027-wake-ups-and-queue-fan-out.md)) | implemented, tested |
 | `sst.config.ts`, `.github/workflows/deploy.yml` | SST v4 stack and OIDC deploy on push to `main`; skipped until `AWS_DEPLOY_ROLE_ARN` is set | written, type-checked with `pnpm sst:check`; **never deployed** |
+| `src/cli/` | `pnpm queue:plan <owner>/<repo> <base>`: read-only dry run, `decide()` once, prints actions, executes none (non-GET requests are refused in the client) | implemented, tested; run live read-only |
 | `docs/setup/` | What a human does to go live: App registration, AWS/OIDC, secrets, per-repo config, ruleset | written |
 
-Nothing has run against live GitHub or AWS. The adapter is tested only
-against `src/github/fake.ts` over intercepted HTTP (msw); the AWS clients only
-against `aws-sdk-client-mock`.
+Nothing has been deployed or has written to live GitHub or AWS. The adapter
+is tested against `src/github/fake.ts` over intercepted HTTP (msw), and its
+read path has run against live GitHub only through the read-only
+`queue:plan` CLI. The AWS clients are tested only against
+`aws-sdk-client-mock`. The reconcile handler logs one JSON line per message
+(`src/handlers/log.ts`), built from an allowlist of fields.
 
 ## Rules that keep this correct
 
@@ -59,6 +63,7 @@ pnpm check[:fix]   # Biome lint + format
 pnpm typecheck     # tsc --noEmit (also what `pnpm build` runs for now)
 pnpm test          # Vitest
 AWS_REGION=<AWS_REGION> pnpm sst:check   # evaluate + type-check sst.config.ts (no AWS calls)
+GITHUB_TOKEN=… pnpm queue:plan <owner>/<repo> <base> [--config f] [--enforce]   # read-only dry run
 ```
 
 A PreToolUse hook (`.claude/settings.json`) blocks `git commit` unless

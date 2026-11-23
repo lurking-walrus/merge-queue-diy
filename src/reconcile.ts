@@ -16,6 +16,10 @@ const MAX_PASSES = 20;
 export interface ReconcileResult {
 	/** Reconcile again after this many seconds even if no webhook arrives. */
 	wakeAfterSeconds: number | null;
+	/** How many of each effect were executed, e.g. `{ report: 3, build: 1 }`. For logs. */
+	actions: Partial<Record<Action["type"], number>>;
+	/** The batch in flight when this reconcile ended, if any. */
+	batchId: number | null;
 }
 
 export async function reconcile(
@@ -25,9 +29,19 @@ export async function reconcile(
 	now: number,
 ): Promise<ReconcileResult> {
 	let state = await store.load();
+	const actions: ReconcileResult["actions"] = {};
+	const count = (a: Action) => {
+		actions[a.type] = (actions[a.type] ?? 0) + 1;
+	};
+	const done = (wakeAfterSeconds: number | null): ReconcileResult => ({
+		wakeAfterSeconds,
+		actions,
+		batchId: state.batch?.id ?? null,
+	});
 
-	const runSimple = async (actions: Action[]) => {
-		for (const a of actions) {
+	const runSimple = async (list: Action[]) => {
+		for (const a of list) {
+			count(a);
 			if (a.type === "deleteBranch") await port.deleteBranch(a.branch);
 			else if (a.type === "cancelRuns") await port.cancelRuns(a.sha);
 			else if (a.type === "report") await port.report(a);
@@ -56,12 +70,14 @@ export async function reconcile(
 		let fedBack = false;
 		for (const a of step.actions) {
 			if (a.type === "build") {
+				count(a);
 				const applied = applyBuildResult(state, await port.build(a));
 				state = applied.state;
 				await store.save(state);
 				await runSimple(applied.actions);
 				fedBack = true;
 			} else if (a.type === "land") {
+				count(a);
 				const applied = applyLandResult(state, await port.land(a));
 				state = applied.state;
 				await store.save(state);
@@ -71,8 +87,8 @@ export async function reconcile(
 				await runSimple([a]);
 			}
 		}
-		if (!fedBack) return { wakeAfterSeconds: step.wakeAfterSeconds };
+		if (!fedBack) return done(step.wakeAfterSeconds);
 	}
 	// Still moving after MAX_PASSES: yield and come straight back.
-	return { wakeAfterSeconds: 1 };
+	return done(1);
 }
