@@ -38,8 +38,38 @@ const commentEvent = z.object({
 /** Only people with write-level standing in the repository may steer the queue. */
 const MAY_COMMAND = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-/** Events that say "a check moved" without naming a base branch. */
-const CHECK_EVENTS = new Set(["check_run", "check_suite", "status", "workflow_run"]);
+/**
+ * The queue's own check run (src/github/adapter.ts `CHECK_NAME`). Its events
+ * are the queue talking to itself and are ignored.
+ */
+export const OWN_CHECK_NAME = "merge-queue";
+
+const checkRunEvent = z.object({
+	action: z.string(),
+	check_run: z.object({ name: z.string() }),
+});
+
+const statusEvent = z.object({ state: z.string() });
+
+/**
+ * Whether a check event can change what the queue decides. Only a check that
+ * finished can: one starting, queued or in progress leaves a PR exactly as
+ * pending as before. A busy repository sends dozens of check events per push,
+ * and each poke costs a reconcile's worth of API calls, so the rest are
+ * dropped here. `check_suite` and `workflow_run` repeat what the completed
+ * check runs already say. Anything missed is repaired by the sweep.
+ */
+function checkFinished(event: string, payload: unknown): boolean {
+	if (event === "check_run") {
+		const p = checkRunEvent.safeParse(payload);
+		return p.success && p.data.action === "completed" && p.data.check_run.name !== OWN_CHECK_NAME;
+	}
+	if (event === "status") {
+		const p = statusEvent.safeParse(payload);
+		return p.success && p.data.state !== "pending";
+	}
+	return false;
+}
 
 export function parseCommand(body: string, number: number): Command | null {
 	const first = body.trim().split(/\r?\n/, 1)[0]?.trim();
@@ -73,7 +103,9 @@ export function routeEvent(event: string, payload: unknown, allowedOwners: strin
 		if (!p.success || p.data.deleted || !p.data.ref.startsWith("refs/heads/")) return null;
 		return { ...poke, base: p.data.ref.slice("refs/heads/".length) };
 	}
-	if (CHECK_EVENTS.has(event)) return { ...poke, base: null };
+	if (event === "check_run" || event === "status") {
+		return checkFinished(event, payload) ? { ...poke, base: null } : null;
+	}
 	if (event === "issue_comment") {
 		const p = commentEvent.safeParse(payload);
 		if (!p.success || !MAY_COMMAND.has(p.data.comment.author_association)) return null;

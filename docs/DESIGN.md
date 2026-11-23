@@ -320,8 +320,11 @@ hosted instance.
 | Issues | write | ejection comments and the "queue frozen" issue (both use the issues API) |
 | Metadata | read | mandatory; also reads the base branch's rules (§9) |
 
-Events: `pull_request`, `push`, `check_run`, `check_suite`, `status`,
-`workflow_run`, `issue_comment`, `installation_repositories`.
+Events: `pull_request`, `push`, `check_run`, `status`, `issue_comment`,
+`installation_repositories`. Ingest pokes only on a check that finished: a
+`completed` check run that is not the queue's own, or a non-pending status.
+Starting and in-progress events change nothing the queue decides on, and on a
+busy repository they outnumber the rest by an order of magnitude.
 
 Set "Where can this GitHub App be installed?" to *Only on this account*.
 
