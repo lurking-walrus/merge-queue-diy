@@ -21,6 +21,11 @@ describe("loadIngestEnv", () => {
 		expect(attempt).not.toThrow(/short/);
 	});
 
+	it("drops the trailing newline a secret stored from a file carries", () => {
+		const env = loadIngestEnv({ ...good, GITHUB_WEBHOOK_SECRET: "test-only-webhook-secret\n" });
+		expect(env.webhookSecret).toBe("test-only-webhook-secret");
+	});
+
 	it("does not need, or read, the app private key", () => {
 		expect(() => loadIngestEnv(good)).not.toThrow();
 	});

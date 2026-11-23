@@ -22,7 +22,10 @@ const allowedOwners = z
 const queueUrl = z.url();
 
 const ingestSchema = z.object({
-	GITHUB_WEBHOOK_SECRET: z.string().min(16, "use at least 16 characters"),
+	// Trimmed: GitHub signs with the secret as typed, but a secret stored from a
+	// file (`sst secret set … < file`) usually ends in a newline, and then every
+	// signature check fails. Whitespace at either end is never part of one.
+	GITHUB_WEBHOOK_SECRET: z.string().trim().min(16, "use at least 16 characters"),
 	MERGE_QUEUE_ALLOWED_OWNERS: allowedOwners,
 	MERGE_QUEUE_QUEUE_URL: queueUrl,
 });
