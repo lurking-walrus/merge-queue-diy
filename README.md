@@ -1,3 +1,44 @@
+# merge-queue-diy
+
+A self-hosted GitHub App that gives private repositories a batched merge
+queue on plans where GitHub's own is not available.
+
+**Status: design only.** Nothing is built or deployed yet. Start with
+[`docs/DESIGN.md`](./docs/DESIGN.md) and
+[ADR-0026](./docs/adr/0026-merge-queue-service-architecture.md).
+
+## Why
+
+Auto-merge plus "require branches up to date" retests every open pull request
+each time any one of them lands — about n²/2 CI runs to land n concurrent PRs.
+With AI agents opening many overlapping PRs, that exhausts a month of Actions
+minutes in days.
+
+The queue tests each PR once in a batch against the exact `main` it will land
+on, finds conflicts before spending CI on them, and never updates a PR branch.
+
+## Shape
+
+- TypeScript on AWS Lambda, SQS FIFO for per-repo serialization, DynamoDB for
+  queue state, deployed with SST. $0 at rest.
+- Talks to GitHub through the REST API only. It never clones or runs
+  repository code.
+- A pure `decide(snapshot) -> actions` core, tested against an in-memory
+  GitHub simulator.
+- You register your own GitHub App and deploy to your own AWS account. Every
+  secret and account-specific value is supplied at deploy time
+  ([DESIGN.md §10](./docs/DESIGN.md#10-service-configuration-and-secrets));
+  none is committed.
+
+## Template scaffolding
+
+This repository was created from a Next.js application template, and that
+scaffolding (auth, billing, database, legal pages) is still in the tree. The
+merge queue does not use it; it will be removed as implementation starts.
+Everything below this line describes the template, not the merge queue.
+
+---
+
 # TypeScript Template
 
 A batteries-included Next.js starter: TypeScript, Tailwind, Drizzle, **auth**

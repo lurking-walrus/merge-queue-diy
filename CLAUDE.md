@@ -2,6 +2,16 @@
 
 ## Project Overview
 
+**This repository is the merge queue GitHub App** described in
+[`docs/DESIGN.md`](./docs/DESIGN.md) and
+[ADR-0026](./docs/adr/0026-merge-queue-service-architecture.md). It was created
+from the template described below; that web-app scaffolding is unused by the
+merge queue and is slated for removal. The repository is **public**: never
+commit an account id, org or repository name, domain, key or token — use
+`sst.Secret`, environment variables and `<PLACEHOLDER>`s (DESIGN.md §10).
+
+Template description, still accurate for the scaffolding in the tree:
+
 Next.js (App Router) TypeScript template with Tailwind CSS, Biome, Vitest,
 Playwright, and Drizzle ORM. It ships **authentication** (better-auth: Google,
 Apple, email/password), **Stripe subscription billing**, a **local-Postgres →

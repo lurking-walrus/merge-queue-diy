@@ -38,6 +38,14 @@ export const env = createEnv({
 		// Drives the AI deployment boundary (src/lib/ai/deployment-boundary.ts).
 		VERCEL_ENV: z.enum(["development", "preview", "production"]).optional(),
 
+		// ---- Merge queue GitHub App (optional until the service is built) ----
+		// See docs/DESIGN.md §10. The private key and webhook secret are
+		// `sst.Secret`s in deployed stages; these are the local-dev names.
+		GITHUB_APP_ID: z.string().optional(),
+		GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+		GITHUB_WEBHOOK_SECRET: z.string().optional(),
+		MERGE_QUEUE_ALLOWED_OWNERS: z.string().optional(),
+
 		// ---- Deployment ----
 		// Set by the SST/AWS deploy (see sst.config.ts). Plays the role VERCEL_ENV
 		// used to: it is what tells the AI deployment boundary that this build is
@@ -79,6 +87,10 @@ export const env = createEnv({
 		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 		VERCEL_ENV: process.env.VERCEL_ENV,
 		DEPLOY_ENV: process.env.DEPLOY_ENV,
+		GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+		GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+		GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET,
+		MERGE_QUEUE_ALLOWED_OWNERS: process.env.MERGE_QUEUE_ALLOWED_OWNERS,
 		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 		NEXT_PUBLIC_GOOGLE_ENABLED: process.env.NEXT_PUBLIC_GOOGLE_ENABLED,
 		NEXT_PUBLIC_APPLE_ENABLED: process.env.NEXT_PUBLIC_APPLE_ENABLED,

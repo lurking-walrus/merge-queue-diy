@@ -129,7 +129,11 @@ function domainConfig() {
 }
 
 function sharedZoneHost(): string {
-	const zone = process.env.APPS_DOMAIN ?? "uresu.app";
+	// No fallback zone on purpose: this repository is public, and a default
+	// here would point every fork's production deploy at someone else's domain.
+	const zone = process.env.APPS_DOMAIN;
+	if (!zone)
+		throw new Error("Set APPS_DOMAIN (shared zone) or APP_DOMAIN (apex) to deploy production.");
 	return `${$app.name}.${zone}`;
 }
 

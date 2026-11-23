@@ -17,6 +17,8 @@ Project documentation for this template and the apps built from it.
 - [`legal.md`](./legal.md) — the legal-disclosure pages (ToS, Privacy, AI
   Disclosure, etc.), what's scaffolded vs. what still needs an attorney, and a
   pre-launch checklist
+- [`DESIGN.md`](./DESIGN.md) — the merge queue design: the problem, the
+  architecture, the queue lifecycle, and the configuration/secrets contract.
 - [`adr/`](./adr) — Architecture Decision Records: the _why_ behind the stack
   and conventions. Read these before changing foundational tooling.
 - [`maintenance/`](./maintenance) — operational runbooks for keeping the

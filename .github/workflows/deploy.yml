@@ -75,4 +75,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          # Hostname inputs are per-deployment configuration, not source:
+          # sst.config.ts has no built-in zone and fails if neither is set.
+          APPS_DOMAIN: ${{ vars.APPS_DOMAIN }}
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
         run: pnpm sst deploy --stage production

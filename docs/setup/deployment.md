@@ -78,8 +78,8 @@ blocks on buying a domain ([ADR-0019](../adr/0019-subdomain-default-domains.md))
 provisions the us-east-1 ACM certificate and the Cloudflare DNS record itself —
 no separate script or manual DNS step:
 
-- Default: `<app>.$APPS_DOMAIN` (falls back to the fleet's shared zone,
-  `uresu.app`, if `APPS_DOMAIN` is unset).
+- Default: `<app>.$APPS_DOMAIN`. There is no built-in fallback zone; a
+  production deploy fails if neither `APPS_DOMAIN` nor `APP_DOMAIN` is set.
 - Promotion to a dedicated apex: set the `APP_DOMAIN` env var before deploying.
   `www.<domain>` redirects to the apex.
 
