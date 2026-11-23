@@ -22,10 +22,13 @@ variables or `sst.Secret`s; docs and tests use placeholders such as
 | `src/ingest/` | Webhook signature check and event → poke routing | implemented, tested |
 | `src/env.ts` | Deployment environment schema | implemented, tested |
 | `src/github/` | REST adapter implementing `GitHubPort` (`adapter.ts`), config loader, Octokit auth; `fake.ts` is an HTTP-level fake GitHub for tests | implemented, tested against the fake |
-| DynamoDB store, Lambda handlers, `sst.config.ts` | — | **not written yet** |
+| `src/store/` | DynamoDB `QueueStore`, one item per queue, version-conditional writes | implemented, tested against a mocked client |
+| `src/handlers/` | Lambda handlers: ingest (Function URL), reconcile (SQS FIFO + sweep), wake-ups via EventBridge Scheduler ([ADR-0027](./docs/adr/0027-wake-ups-and-queue-fan-out.md)) | implemented, tested |
+| `sst.config.ts`, deploy workflow | — | **not written yet** |
 
 Nothing has run against live GitHub or AWS. The adapter is tested only
-against `src/github/fake.ts` over intercepted HTTP (msw).
+against `src/github/fake.ts` over intercepted HTTP (msw); the AWS clients only
+against `aws-sdk-client-mock`.
 
 ## Rules that keep this correct
 
@@ -34,6 +37,9 @@ against `src/github/fake.ts` over intercepted HTTP (msw).
   the queue testable without GitHub; do not erode it.
 - **Events are hints, never data.** A webhook only says which queue to look
   at. Decisions are made from what `GitHubPort` reads back.
+- **A queue's state is only touched from its own SQS message group.** A
+  `base: null` poke is fanned out into per-base pokes, never reconciled
+  directly (ADR-0027).
 - **Every effect must be safe to repeat.** A reconcile can crash between
   saving state and finishing an effect; the next one re-emits it.
 - **The landed tree must equal the tested tree.** If it does not, the queue

@@ -1,8 +1,8 @@
 # Merge queue — design
 
-**Status:** the decision core, reconcile loop, simulator, webhook intake and
-GitHub REST adapter are implemented (`src/`). The store, Lambda handlers and
-SST configuration are not, so nothing is deployed.
+**Status:** the decision core, reconcile loop, simulator, webhook intake,
+GitHub REST adapter, DynamoDB store and Lambda handlers are implemented
+(`src/`). The SST configuration is not, so nothing is deployed.
 **Date:** 2026-11-23
 
 A GitHub App that lands pull requests through a batched, serialized queue, so
@@ -108,8 +108,8 @@ src/
   ingest/       signature verification, event → poke routing
   env.ts        deployment environment schema
   github/       REST adapter implementing GitHubPort, config loader, HTTP fake for tests
-  store/        (planned) DynamoDB record + optimistic locking
-  handlers/     (planned) Lambda entrypoints
+  store/        DynamoDB record + optimistic locking
+  handlers/     Lambda entrypoints; wake-ups and fan-out per ADR-0027
 sst.config.ts   (planned) functions, queue, table, schedule, secrets
 docs/
 ```
@@ -261,6 +261,7 @@ own values; this repository contains names and placeholders only.
 | `GITHUB_WEBHOOK_SECRET` | **yes** | `sst secret set GithubWebhookSecret` | Verifies `X-Hub-Signature-256`. Readable only by the ingest function. |
 | `GITHUB_APP_ID` | no | deploy environment variable | Identifies the app registration. |
 | `MERGE_QUEUE_ALLOWED_OWNERS` | no | deploy environment variable | Comma-separated org/user logins this deployment serves. Events from any other installation are dropped. |
+| `MERGE_QUEUE_QUEUE_URL`, `MERGE_QUEUE_QUEUE_ARN`, `MERGE_QUEUE_TABLE`, `MERGE_QUEUE_SCHEDULER_ROLE_ARN`, `MERGE_QUEUE_SCHEDULE_GROUP` | no | set by the deploy from the resources it creates | Where pokes, state and wake-ups go. |
 | `AWS_DEPLOY_ROLE_ARN` | no | GitHub Actions *variable* on the protected `production` environment | OIDC role the deploy workflow assumes. No long-lived AWS keys anywhere. |
 | AWS account id, region | no | implied by the role / SST provider config | Never written into docs or source. |
 
