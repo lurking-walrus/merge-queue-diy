@@ -1,6 +1,6 @@
 # ADR-0009: Set baseline HTTP security headers
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-06-19
 
 ## Context

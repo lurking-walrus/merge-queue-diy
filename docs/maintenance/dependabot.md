@@ -10,7 +10,7 @@ lives in `.github/dependabot.yml`; the automation in
 |-------------|-----------|
 | **patch** (`x.y.Z`) | Auto-merges once all required checks pass |
 | **minor** (`x.Y.z`) | Auto-merges once all required checks pass |
-| **major** (`X.y.z`) | **Left for manual review** — E2E isn't exhaustive, so a breaking major could pass build + unit tests and still break auth/billing at runtime |
+| **major** (`X.y.z`) | **Left for manual review** — a breaking major can pass type-check and unit tests and still change behaviour the tests do not cover |
 
 Applies to both ecosystems Dependabot watches (npm + GitHub Actions).
 
@@ -34,7 +34,7 @@ prefixed by the caller job name. Required status checks on the `main` ruleset:
   (see [pnpm-lockfile.md](./pnpm-lockfile.md); the recurring Dependabot break, so
   the most important guard for unattended merges).
 - **`ci / Lint & format (Biome)`**, **`ci / Type check`**,
-  **`ci / Unit tests (Vitest)`**, **`ci / Build`**, **`ci / DB migration check`**.
+  **`ci / Unit tests (Vitest)`**, **`ci / Build`**.
 
 CodeQL (default code scanning) also runs on PRs but is intentionally **not**
 required — it scans our code, not the bumped dependency, and requiring it risks
@@ -47,7 +47,6 @@ want a hard security gate.
   `gh pr merge --disable-auto <url>`, or convert it to a draft.
 - **Force a major through** (after reviewing): approve and
   `gh pr merge --squash <url>` manually.
-- **Run E2E locally before merging a covered change**: `pnpm e2e`.
 
 ## When the lockfile breaks despite the guard
 

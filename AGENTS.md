@@ -1,29 +1,16 @@
 # AGENTS.md
 
 This project's agent guidance lives in [`CLAUDE.md`](./CLAUDE.md) — read it first.
-It covers the stack, project structure, commands, auth, billing, database, and
-security conventions.
 
-Quick pointers for any coding agent (Claude Code, Codex, Cursor, …):
+Quick pointers for any coding agent:
 
-- **Setup:** `pnpm bootstrap` (needs local Postgres). See `docs/setup/getting-started.md`.
+- **What this is:** a merge queue GitHub App. Design in `docs/DESIGN.md`.
 - **Before committing:** `pnpm check:fix && pnpm test`. A commit hook enforces this.
-- **Env:** add new vars to both `src/env.ts` and `.env.example`; import `env` from
-  `@/env`, never `process.env`.
-- **Auth:** gate protected code with `requireUser()` (`src/lib/auth/session.ts`),
-  not the middleware alone.
-- **DB:** edit `src/db/schema.ts`; `pnpm db:push` (dev) / `db:generate`+`db:migrate`
-  (prod). Never hand-edit `drizzle/`. CI fails a PR that changes `schema.ts`
-  without a matching migration file; the deploy workflow auto-applies pending
-  migrations via `db:deploy`. See `docs/maintenance/database-migrations.md`.
+- **`src/core` stays pure** — no I/O, no clock. New behaviour gets a scenario
+  in `src/sim/scenarios.test.ts`.
+- **Public repository:** no account ids, org names, domains, keys or tokens in
+  source, tests or docs. Add new env vars to both `src/env.ts` and `.env.example`.
 - **Foundational changes:** read the relevant ADR in `docs/adr/` first; add a
   superseding ADR when you change a decision.
-- **Archive:** `docs/archive/` holds superseded/historical docs only — it's
-  historical record, not current truth; don't use it to inform new work.
-- **Provisioning:** use the CLIs in `docs/cli-reference.md`; the `provision-app`
-  skill orchestrates them.
-- **Infrastructure:** read [`docs/agent.md`](./docs/agent.md) before adding
-  cloud resources. Application infra belongs here; organization/account
-  guardrails belong in the private source named in the derived project's
-  `PROJECT_CONTEXT.md`.
-- **Security:** `docs/security.md`; run `/security-review` before shipping.
+- **Archive:** `docs/archive/` is historical record, not current truth.
+- **Infrastructure:** read `docs/agent.md` before adding cloud resources.

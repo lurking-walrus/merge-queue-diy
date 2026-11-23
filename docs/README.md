@@ -1,28 +1,14 @@
 # Documentation
 
-Project documentation for this template and the apps built from it.
-
-## Contents
-
-- [`setup/`](./setup) — step-by-step guides to get an app running and
-  provisioned: [getting started](./setup/getting-started.md),
-  [database](./setup/database.md), [auth](./setup/auth-setup.md),
-  [Stripe](./setup/stripe.md), [deployment](./setup/deployment.md),
-  [Workspace support group](./setup/workspace-support-group.md).
-- [`cli-reference.md`](./cli-reference.md) — the CLIs used to operate the app
-  (sst, neonctl, gcloud, gh, stripe, cf, aws) and the commands agents actually need.
-- [`security.md`](./security.md) — the security posture and pre-deploy checklist.
-- [`agent.md`](./agent.md) — cloud/IaC ownership, deployment boundaries, and
-  the private organization-level source of truth.
-- [`legal.md`](./legal.md) — the legal-disclosure pages (ToS, Privacy, AI
-  Disclosure, etc.), what's scaffolded vs. what still needs an attorney, and a
-  pre-launch checklist
+- [`DESIGN.md`](./DESIGN.md) — the merge queue design: the problem, the
+  architecture, the queue lifecycle, and the configuration/secrets contract.
 - [`adr/`](./adr) — Architecture Decision Records: the _why_ behind the stack
   and conventions. Read these before changing foundational tooling.
-- [`maintenance/`](./maintenance) — operational runbooks for keeping the
-  template healthy: [database migrations](./maintenance/database-migrations.md),
-  [pnpm lockfile](./maintenance/pnpm-lockfile.md), and
+- [`agent.md`](./agent.md) — cloud/IaC ownership and deployment boundaries.
+- [`maintenance/`](./maintenance) — operational runbooks:
+  [pnpm lockfile](./maintenance/pnpm-lockfile.md) and
   [Dependabot auto-merge](./maintenance/dependabot.md).
+- [`archive/`](./archive) — superseded documents. Historical record only.
 
 ## Conventions
 

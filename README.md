@@ -1,75 +1,62 @@
-# TypeScript Template
+# merge-queue-diy
 
-A batteries-included Next.js starter: TypeScript, Tailwind, Drizzle, **auth**
-(Google · Apple · email/password), **Stripe billing**, and a **local-Postgres →
-Neon** dev/prod split — with security defaults and agent tooling from the start.
+A self-hosted GitHub App that gives private repositories a batched merge
+queue on plans where GitHub's own is not available.
 
-## Quick start
+**Status: early.** The decision core is built and tested; the parts that talk
+to GitHub and AWS are not, so it cannot be deployed yet. Start with
+[`docs/DESIGN.md`](./docs/DESIGN.md) and
+[ADR-0026](./docs/adr/0026-merge-queue-service-architecture.md).
+
+## Why
+
+Auto-merge plus "require branches up to date" retests every open pull request
+each time any one of them lands — about n²/2 CI runs to land n concurrent PRs.
+With AI agents opening many overlapping PRs, that exhausts a month of Actions
+minutes in days.
+
+The queue tests each PR once in a batch against the exact `main` it will land
+on, finds conflicts before spending CI on them, and never updates a PR branch.
+
+## Shape
+
+- TypeScript on AWS Lambda, SQS FIFO for per-repo serialization, DynamoDB for
+  queue state, deployed with SST. $0 at rest.
+- Talks to GitHub through the REST API only. It never clones or runs
+  repository code.
+- A pure `decide(snapshot) -> actions` core, tested against an in-memory
+  GitHub simulator.
+- You register your own GitHub App and deploy to your own AWS account. Every
+  secret and account-specific value is supplied at deploy time
+  ([DESIGN.md §10](./docs/DESIGN.md#10-service-configuration-and-secrets));
+  none is committed.
+
+## Status
+
+| Piece | State |
+| --- | --- |
+| Decision core (`src/core`) | implemented, tested |
+| Reconcile loop and ports | implemented, tested against the simulator |
+| In-memory GitHub simulator and end-to-end scenarios | implemented |
+| Webhook signature check and event routing | implemented, tested |
+| GitHub REST adapter, DynamoDB store, Lambda handlers, SST config | not written yet |
+
+It cannot be deployed yet, and nothing has run against live GitHub or AWS.
+
+## Develop
 
 ```bash
-bash scripts/rename-app.sh my-app   # name the project (or use the `rename-app` skill)
-pnpm bootstrap                      # .env + secret + local DB + schema
-pnpm dev                            # → http://localhost:3000
+corepack enable && pnpm install
+pnpm check      # Biome
+pnpm typecheck  # tsc
+pnpm test       # Vitest — includes the simulator scenarios
 ```
 
-`pnpm bootstrap` needs a local Postgres (`brew install postgresql@17 && brew services
-start postgresql@17`). Email/password sign-up works immediately; verification and
-reset links print to the dev server console. Add Google/Apple/Stripe/email keys
-to `.env` when you want them — each is inert until configured.
+The scenarios in [`src/sim/scenarios.test.ts`](./src/sim/scenarios.test.ts) are
+the quickest way to see what the queue does: ten PRs landing in two CI runs, a
+conflicting PR ejected before any CI is spent, a red batch bisected down to the
+one PR that broke it.
 
-## Stack
+## Licence
 
-| Tool | Purpose |
-|------|---------|
-| [Next.js](https://nextjs.org) | React framework (App Router) |
-| [Tailwind CSS](https://tailwindcss.com) | Utility-first CSS |
-| [Drizzle ORM](https://orm.drizzle.team) | Type-safe SQL ORM |
-| Local Postgres / [Neon](https://neon.tech) | Dev database / serverless Postgres in prod |
-| [better-auth](https://better-auth.com) | Self-hosted auth (Google, Apple, email/password) |
-| [Stripe](https://stripe.com) | Subscription billing (env-flagged) |
-| [Vercel AI SDK](https://ai-sdk.dev) | AI features — subscription CLIs in dev, API keys deployed ([docs](./docs/setup/ai.md)) |
-| [Biome](https://biomejs.dev) · [Vitest](https://vitest.dev) · [Playwright](https://playwright.dev) | Lint/format · unit · e2e |
-
-## Scripts
-
-```bash
-pnpm bootstrap    # bootstrap a fresh clone
-pnpm dev          # dev server
-pnpm build        # production build
-pnpm check:fix    # lint + format
-pnpm test         # unit tests
-pnpm e2e          # e2e (local)
-pnpm db:local     # create local dev DB
-pnpm db:push      # push schema (dev)
-pnpm db:generate && pnpm db:migrate   # migrations (prod path)
-```
-
-Migrations auto-apply as a pre-deploy step in `.github/workflows/deploy.yml`,
-and CI blocks a PR that changes the schema without one — see
-[`docs/maintenance/database-migrations.md`](./docs/maintenance/database-migrations.md).
-
-## TypeScript
-
-The template is on **TypeScript 7** (the native compiler). Keep these tsconfig
-conventions in derived apps — the reasoning is in
-[ADR-0025](./docs/adr/0025-typescript-7.md):
-
-- no `baseUrl`; aliases are tsconfig-relative (`"@/*": ["./src/*"]`);
-- ambient type packages are listed in `compilerOptions.types` (`["node"]` here) —
-  TS 7 does not auto-include `@types/*`;
-- an emitting tsconfig (e.g. a library build) needs an explicit `rootDir`;
-- TS 7 has no JS compiler API — a tool that needs it gets the
-  `@typescript/typescript6` compatibility package, not a `typescript@6` downgrade.
-
-## Documentation
-
-Start with [`docs/setup/getting-started.md`](./docs/setup/getting-started.md).
-The _why_ behind the stack is in [ADRs](./docs/adr); provisioning + operations in
-[`docs/cli-reference.md`](./docs/cli-reference.md); security in
-[`docs/security.md`](./docs/security.md). Agents: see [`CLAUDE.md`](./CLAUDE.md)
-and the `provision-app` / `rename-app` skills in `.claude/skills/`.
-[`docs/archive/`](./docs/archive/) holds superseded/historical documentation —
-it's a record of the past, not a guide to the current project.
-
-> Uses pnpm pinned via `packageManager`. Run `corepack enable` once so your local
-> pnpm matches the project ([ADR-0002](./docs/adr/0002-package-manager-pnpm-pinned.md)).
+[MIT](./LICENSE).

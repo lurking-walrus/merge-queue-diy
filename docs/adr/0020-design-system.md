@@ -1,6 +1,6 @@
 # ADR-0020: UI on the @kornorg/design-system package
 
-- Status: Accepted
+- Status: Superseded by [ADR-0026](./0026-merge-queue-service-architecture.md)
 - Date: 2026-07-12
 
 ## Context
