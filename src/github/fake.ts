@@ -292,6 +292,16 @@ export class FakeGitHub {
 		return this.issueComments.filter((c) => c.issue === number).map((c) => c.body);
 	}
 
+	/** What the PR's `merge-queue` check reads now: its newest run's title. */
+	queueCheck(number: number): string | undefined {
+		const sha = this.pull(number).headSha;
+		return (
+			this.queueChecks(sha)
+				.filter((r) => r.name === "merge-queue")
+				.sort((a, b) => b.id - a.id)[0]?.output.title ?? undefined
+		);
+	}
+
 	queueChecks(sha: string): CheckRun[] {
 		return this.checkRuns.filter((r) => r.head_sha === sha && r.app.id === FAKE_APP_ID);
 	}

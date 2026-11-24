@@ -77,6 +77,10 @@ export async function reconcile(
 		if (isIdle(state)) await store.discard();
 		else await store.save(state);
 
+		// Reports and clean-ups first: a report decided in this pass describes the
+		// state before the build or land below. Sent after it, a "landing" report
+		// would overwrite the green "landed" check of a PR that has just merged.
+		await runSimple(step.actions.filter((a) => a.type !== "build" && a.type !== "land"));
 		let fedBack = false;
 		for (const a of step.actions) {
 			if (a.type === "build") {
@@ -93,8 +97,6 @@ export async function reconcile(
 				await store.save(state);
 				await runSimple(applied.actions);
 				fedBack = true;
-			} else {
-				await runSimple([a]);
 			}
 		}
 		if (!fedBack) return done(step.wakeAfterSeconds);

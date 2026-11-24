@@ -40,6 +40,7 @@ interface World {
 	branchNames(): string[];
 	batchRuns(): number;
 	lastReport(number: number): Extract<Action, { type: "report" }> | undefined;
+	queueCheck(number: number): string | undefined;
 	readonly reports: Extract<Action, { type: "report" }>[];
 	readonly comments: Extract<Action, { type: "comment" }>[];
 	readonly cancelled: string[];
@@ -110,6 +111,18 @@ describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
 		expect(sim.batchRuns()).toBe(2);
 		expect(sim.branchNames()).toEqual(["main"]);
 		expect(store.state.frozen).toBeNull();
+	});
+
+	it("leaves a landed PR's check reading landed, not landing", async () => {
+		const { sim, port, store, cfg } = setup(config());
+		const a = sim.openPull({ "a.txt": "a" });
+		const b = sim.openPull({ "b.txt": "b" });
+
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(a)).toBe("merged");
+		expect(sim.queueCheck(a)).toBe("landed with batch 1");
+		expect(sim.queueCheck(b)).toBe("landed with batch 1");
 	});
 
 	it("ejects a textual conflict before spending CI on it", async () => {
