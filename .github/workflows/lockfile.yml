@@ -15,4 +15,4 @@ concurrency:
 
 jobs:
   lockfile:
-    uses: kornsour/gh-automation/.github/workflows/lockfile-guard.yml@b3c9725939d515a545219990f226bcfb1b754af6 # v1.1.0
+    uses: kornsour/gh-automation/.github/workflows/lockfile-guard.yml@bc8fb0fa2cdaf3e16af7ec43bfddc84dfdd441f3 # v1.2.0
