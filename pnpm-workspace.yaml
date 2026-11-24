@@ -1,2 +1,11 @@
-ignoredBuiltDependencies:
-  - unrs-resolver
+# pnpm 11+ reads settings from here, not from package.json's "pnpm" field.
+overrides:
+  esbuild: 0.28.1
+  vite: 8.0.16
+
+# Dependency build scripts (pnpm 11+ blocks them unless listed here).
+# false = never run. esbuild's postinstall only fetches a platform binary that
+# its @esbuild/* optional dependency already provides; pnpm 10 skipped it too.
+allowBuilds:
+  esbuild: false
+  unrs-resolver: false

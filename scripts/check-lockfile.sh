@@ -49,7 +49,9 @@ def construct_mapping(self, node, deep=False):
 DupChecker.construct_mapping = construct_mapping
 
 with open(sys.argv[1]) as f:
-    yaml.load(f, Loader=DupChecker)
+    # pnpm 12 lockfiles are two YAML documents (env lockfile + dependencies).
+    for _ in yaml.load_all(f, Loader=DupChecker):
+        pass
 print(f"✓ {sys.argv[1]}: no duplicate keys")
 PY
 	exit 0

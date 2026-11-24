@@ -77,7 +77,7 @@ A PreToolUse hook (`.claude/settings.json`) blocks `git commit` unless
 - Biome only; tabs; line width 100; double quotes; semicolons.
 - TypeScript 7, strict, `noUncheckedIndexedAccess`
   ([ADR-0025](./docs/adr/0025-typescript-7.md)). pnpm pinned via
-  `packageManager` ([ADR-0002](./docs/adr/0002-package-manager-pnpm-pinned.md)).
+  `packageManager` ([ADR-0028](./docs/adr/0028-package-manager-pnpm-12.md)).
 - Tests live beside the source as `*.test.ts`.
 - Environment variables are declared in `src/env.ts` **and** `.env.example`.
   Read them through `loadEnv()`, not `process.env`. Error messages name the
