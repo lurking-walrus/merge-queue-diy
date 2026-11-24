@@ -52,6 +52,8 @@ export interface Outcome {
 	/** Effects executed, by type. */
 	actions?: Partial<Record<string, number>>;
 	batchId?: number | null;
+	/** The base branch requires branches to be up to date (`strict`); see log.ts. */
+	strictChecks?: boolean;
 }
 
 export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promise<Outcome> {
@@ -101,7 +103,7 @@ export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promi
 		const store = deps.table.queue(key, m.installationId);
 		try {
 			if (m.command) await applyStoredCommand(store, m.command);
-			const { wakeAfterSeconds, actions, batchId } = await reconcile(
+			const { wakeAfterSeconds, actions, batchId, strictChecks } = await reconcile(
 				port,
 				store,
 				config.config,
@@ -113,7 +115,13 @@ export async function handleMessage(deps: ReconcileDeps, m: QueueMessage): Promi
 					deps.now() + wakeAfterSeconds,
 				);
 			}
-			return { kind: "reconciled", wakeAfterSeconds, actions, batchId };
+			return {
+				kind: "reconciled",
+				wakeAfterSeconds,
+				actions,
+				batchId,
+				...(strictChecks ? { strictChecks } : {}),
+			};
 		} catch (e) {
 			// Someone else wrote this queue meanwhile: reload and decide again, never overwrite.
 			if (e instanceof VersionConflict && attempt < MAX_ATTEMPTS) continue;

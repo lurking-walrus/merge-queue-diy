@@ -183,14 +183,27 @@ describe("review requirements", () => {
 		expect(read.reviewRequirements).toEqual({ resolvedConversations: false, approvals: 0 });
 	});
 
-	it("reads neither rules nor reviews with review_requirements: none", async () => {
+	it("reads no reviews with review_requirements: none, but still the rules for strict", async () => {
 		const { fake, gh } = world();
 		fake.requireReviews({ resolvedConversations: true });
 		fake.openPull({ "a.txt": "a" });
 
-		await gh.readQueue(parseRepoConfig({ required_checks: ["ci"], review_requirements: "none" }));
+		const read = await gh.readQueue(
+			parseRepoConfig({ required_checks: ["ci"], review_requirements: "none" }),
+		);
 
-		expect(fake.requests.some((r) => r.includes("/rules/") || r.includes("graphql"))).toBe(false);
+		expect(read.reviewRequirements).toEqual({ resolvedConversations: false, approvals: 0 });
+		expect(fake.requests).toContain("GET /rules/branches/main");
+		expect(fake.requests.some((r) => r.includes("graphql"))).toBe(false);
+	});
+
+	it("reports whether the branch requires branches to be up to date (strict)", async () => {
+		const { fake, gh } = world();
+		fake.openPull({ "a.txt": "a" });
+
+		expect((await gh.readQueue(cfg)).strictChecks).toBe(false);
+		fake.requireUpToDate(true);
+		expect((await gh.readQueue(cfg)).strictChecks).toBe(true);
 	});
 });
 

@@ -36,7 +36,11 @@ function build(): ReconcileDeps {
 			now,
 		}),
 		now,
-		log: (line) => console.log(JSON.stringify(line)),
+		// `warn` lines go to stderr, so CloudWatch shows them at WARN level.
+		log: (line) =>
+			line.level === "warn"
+				? console.warn(JSON.stringify(line))
+				: console.log(JSON.stringify(line)),
 	};
 }
 

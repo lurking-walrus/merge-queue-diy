@@ -473,6 +473,26 @@ describe("structured logs", () => {
 		expect(text).not.toContain("delivery");
 	});
 
+	it("warns on every reconcile while the base branch requires branches to be up to date", async () => {
+		const w = reconcileWorld();
+		w.fake.requireUpToDate(true);
+		w.fake.openPull({ "a.txt": "a" });
+		w.fake.finishCi();
+		const handler = createReconcileHandler(w.deps);
+
+		await handler({
+			Records: [{ messageId: "m1", body: JSON.stringify(w.poke()) } as SQSEvent["Records"][number]],
+		});
+
+		const { STRICT_WARNING } = await import("./log");
+		expect(w.logs[0]).toMatchObject({
+			level: "warn",
+			outcome: "reconciled",
+			batch: null,
+			warning: STRICT_WARNING,
+		});
+	});
+
 	it("names only the kind of trigger, never its id", async () => {
 		const { triggerKind } = await import("./log");
 		expect(triggerKind("webhook:72d3162e-cc78>main")).toBe("webhook");

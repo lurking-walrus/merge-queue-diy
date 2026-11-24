@@ -39,6 +39,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
 		baseSha: "base-1",
 		pulls: [],
 		reviewRequirements: NO_REVIEW_REQUIREMENTS,
+		strictChecks: false,
 		state: emptyState(),
 		batchChecks: null,
 		...over,

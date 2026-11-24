@@ -20,6 +20,8 @@ export interface ReconcileResult {
 	actions: Partial<Record<Action["type"], number>>;
 	/** The batch in flight when this reconcile ended, if any. */
 	batchId: number | null;
+	/** The base branch requires branches to be up to date (`strict`), as last read. */
+	strictChecks: boolean;
 }
 
 export async function reconcile(
@@ -29,6 +31,7 @@ export async function reconcile(
 	now: number,
 ): Promise<ReconcileResult> {
 	let state = await store.load();
+	let strictChecks = false;
 	const actions: ReconcileResult["actions"] = {};
 	const count = (a: Action) => {
 		actions[a.type] = (actions[a.type] ?? 0) + 1;
@@ -37,6 +40,7 @@ export async function reconcile(
 		wakeAfterSeconds,
 		actions,
 		batchId: state.batch?.id ?? null,
+		strictChecks,
 	});
 
 	const runSimple = async (list: Action[]) => {
@@ -51,7 +55,9 @@ export async function reconcile(
 	};
 
 	for (let pass = 0; pass < MAX_PASSES; pass++) {
-		const { baseSha, pulls, reviewRequirements } = await port.readQueue(config);
+		const read = await port.readQueue(config);
+		const { baseSha, pulls, reviewRequirements } = read;
+		strictChecks = read.strictChecks;
 		const testing = state.batch?.status === "testing" ? state.batch.sha : null;
 		const batchChecks = testing ? await port.readChecks(testing, config.requiredChecks) : null;
 
@@ -62,6 +68,7 @@ export async function reconcile(
 			baseSha,
 			pulls,
 			reviewRequirements,
+			strictChecks,
 			state,
 			batchChecks,
 		});

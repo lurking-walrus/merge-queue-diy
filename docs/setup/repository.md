@@ -64,7 +64,20 @@ time.
 
 ## 3. Enforce
 
-Set `mode: enforce`. From then on the app builds batches, waits for
+First make sure **"Require branches to be up to date before merging"
+(`strict`) is off** in every ruleset that applies to the base branch,
+organization rulesets included. The queue lands a batch's PRs one after
+another, and with `strict` on GitHub refuses each PR after the first because
+it is now behind. The batch test replaces `strict`, as in GitHub's own merge
+queue. `pnpm queue:plan` prints whether it is on.
+
+If it is on (or is turned on later), enforce mode pauses: no batches are
+built, each queued PR's `merge-queue` check reads `queue paused: … requires
+branches to be up to date …`, and every reconcile logs a `warn` line. It
+resumes by itself once `strict` is off. The app cannot see classic branch
+protection, so check that by hand if you use it.
+
+Then set `mode: enforce`. From then on the app builds batches, waits for
 `required_checks` on the batch commit, and merges.
 
 Also remove whatever made PRs merge before: an auto-merge workflow, and any
@@ -81,11 +94,12 @@ On the default-branch ruleset:
 1. Under **Require status checks to pass**, replace the list of CI checks
    with the single check **`merge-queue`**, and pin its source to this GitHub
    App so nothing else can satisfy it.
-2. Turn **off** "Require branches to be up to date before merging"
-   (`strict`).
+2. Leave "Require branches to be up to date before merging" (`strict`) **off**
+   (step 3).
 3. Squash mode needs no bypass. Merge mode lands by fast-forwarding the base
    branch, so add the app as a **bypass actor** for the pull-request rule.
 4. Keep your own admin bypass for emergencies. The queue treats a hand merge
    like any other move of the base branch.
 
-To undo, restore the previous required checks and `strict`.
+To undo, set `mode: shadow` first, then restore the previous required checks
+and, if you want it back, `strict`.

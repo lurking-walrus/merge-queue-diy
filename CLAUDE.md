@@ -24,15 +24,14 @@ variables or `sst.Secret`s; docs and tests use placeholders such as
 | `src/github/` | REST adapter implementing `GitHubPort` (`adapter.ts`), config loader, Octokit auth; `fake.ts` is an HTTP-level fake GitHub for tests | implemented, tested against the fake |
 | `src/store/` | DynamoDB `QueueStore`, one item per queue, version-conditional writes | implemented, tested against a mocked client |
 | `src/handlers/` | Lambda handlers: ingest (Function URL), reconcile (SQS FIFO + sweep), wake-ups via EventBridge Scheduler ([ADR-0027](./docs/adr/0027-wake-ups-and-queue-fan-out.md)) | implemented, tested |
-| `sst.config.ts`, `.github/workflows/deploy.yml` | SST v4 stack and OIDC deploy on push to `main`; skipped until `AWS_DEPLOY_ROLE_ARN` is set | written, type-checked with `pnpm sst:check`; **never deployed** |
+| `sst.config.ts`, `.github/workflows/deploy.yml` | SST v4 stack and OIDC deploy on push to `main`; skipped until `AWS_DEPLOY_ROLE_ARN` is set | type-checked with `pnpm sst:check`; deployed by one operator from their own private repository, which pins a commit of this one |
 | `src/cli/` | `pnpm queue:plan <owner>/<repo> <base>`: read-only dry run, `decide()` once, prints actions, executes none (non-GET requests are refused in the client) | implemented, tested; run live read-only |
 | `docs/setup/` | What a human does to go live: App registration, AWS/OIDC, secrets, per-repo config, ruleset | written |
 
-Nothing has been deployed or has written to live GitHub or AWS. The adapter
-is tested against `src/github/fake.ts` over intercepted HTTP (msw), and its
-read path has run against live GitHub only through the read-only
-`queue:plan` CLI. The AWS clients are tested only against
-`aws-sdk-client-mock`. The reconcile handler logs one JSON line per message
+It is deployed and running: shadow mode on its first repositories, then
+enforce mode on one private repository from 2026-11-24. In tests the adapter
+runs against `src/github/fake.ts` over intercepted HTTP (msw) and the AWS
+clients against `aws-sdk-client-mock`. The reconcile handler logs one JSON line per message
 (`src/handlers/log.ts`), built from an allowlist of fields.
 
 ## Rules that keep this correct
@@ -53,6 +52,10 @@ read path has run against live GitHub only through the read-only
   real `reconcile` loop, not only a unit test of `decide`. Every scenario runs
   twice — against the simulator and against the REST adapter over HTTP — so a
   change to either must keep both passing.
+- **`strict` must stay off** on a queued base branch: the queue's batch test
+  replaces it, and the merge API would refuse every PR after a batch's first.
+  The app reads it from the branch rules and pauses enforce mode, loudly,
+  while it is on. Never "fix" a paused queue by working around that check.
 - Fork pull requests are never queued; only OWNER/MEMBER/COLLABORATOR comments
   are commands. Both are security boundaries.
 
