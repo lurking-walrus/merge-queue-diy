@@ -96,6 +96,8 @@ export class SimGitHub implements GitHubPort {
 	readonly ciRuns: CiRun[] = [];
 	readonly cancelled: string[] = [];
 	readonly reports: ActionOf<"report">[] = [];
+	/** The `merge-queue` check's current title per head commit, as GitHub would show it. */
+	private readonly queueCheckTitles = new Map<string, string>();
 	readonly comments: ActionOf<"comment">[] = [];
 	readonly issues: ActionOf<"openIssue">[] = [];
 
@@ -204,6 +206,11 @@ export class SimGitHub implements GitHubPort {
 		return this.ciRuns.filter((r) => r.kind === "batch").length;
 	}
 
+	/** What the PR's `merge-queue` check reads now. */
+	queueCheck(number: number): string | undefined {
+		return this.queueCheckTitles.get(this.pull(number).headSha);
+	}
+
 	lastReport(number: number): ActionOf<"report"> | undefined {
 		return this.reports.findLast((r) => r.number === number);
 	}
@@ -297,6 +304,8 @@ export class SimGitHub implements GitHubPort {
 				}
 				this.branches.set("main", this.commit(tree, [this.main()]));
 			}
+			// Like the adapter: the check turns green as the PR lands.
+			this.queueCheckTitles.set(m.headSha, `landed with batch ${a.batchId}`);
 			p.state = "merged";
 			merged.push(m.number);
 		}
@@ -318,6 +327,7 @@ export class SimGitHub implements GitHubPort {
 
 	async report(a: ActionOf<"report">): Promise<void> {
 		this.reports.push(a);
+		this.queueCheckTitles.set(a.headSha, a.summary);
 	}
 
 	async comment(a: ActionOf<"comment">): Promise<void> {
