@@ -1,14 +1,16 @@
 # Maintaining the pnpm lockfile
 
 Operational runbook for `pnpm-lock.yaml` health. For the _why_ behind the pinned
-pnpm version, see [ADR-0002](../adr/0002-package-manager-pnpm-pinned.md).
+pnpm version, see [ADR-0028](../adr/0028-package-manager-pnpm-12.md).
 
 ## Ground rules
 
 - The package manager is pinned in `package.json` `packageManager`. Run
   `corepack enable` once so your local pnpm matches it. Version drift between
   local and CI is what caused the incident below.
-- `lockfileVersion` is `9.0` (compatible with pnpm 9/10/11). Do not downgrade it.
+- `lockfileVersion` is `9.0`. Do not downgrade it.
+- pnpm 12 writes the file as two YAML documents: an env lockfile recording the
+  pinned pnpm, then the dependency lockfile. Parse it as a YAML stream.
 - Always commit `package.json` and `pnpm-lock.yaml` together.
 
 ## Incident: corrupted lockfile from a Dependabot merge (2026-06-19)
@@ -52,9 +54,10 @@ If `main`'s lockfile is broken, Dependabot cannot parse it and will not update
 any PR. Fix `main` first (above), then comment `@dependabot recreate` on each
 stuck PR so it regenerates against the healthy base.
 
-## Note on pnpm 11's release-age cooldown
+## Note on pnpm's release-age cooldown
 
-pnpm 11 enforces a built-in `minimumReleaseAge` cooldown that withholds
-just-published versions and can reject otherwise-valid lockfiles. This is a
-reason the template stays on pnpm 10.x — see ADR-0002 before considering an
-upgrade.
+pnpm 11+ applies a built-in, non-strict `minimumReleaseAge` (1440 minutes) that
+holds back just-published versions. ADR-0002 kept the project on pnpm 10.x to
+avoid it; [ADR-0028](../adr/0028-package-manager-pnpm-12.md) moved to pnpm 12
+and leaves the default in place. If it blocks Dependabot updates, set
+`minimumReleaseAge` explicitly in `pnpm-workspace.yaml`.

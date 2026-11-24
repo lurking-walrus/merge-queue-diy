@@ -17,7 +17,7 @@ jobs:
   ci:
     # Centralized, standardized CI shared across the template-derived repos.
     # See github.com/kornsour/gh-automation.
-    uses: kornsour/gh-automation/.github/workflows/ci.yml@b3c9725939d515a545219990f226bcfb1b754af6 # v1.1.0
+    uses: kornsour/gh-automation/.github/workflows/ci.yml@bc8fb0fa2cdaf3e16af7ec43bfddc84dfdd441f3 # v1.2.0
     with:
       migration-check: false
 

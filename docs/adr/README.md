@@ -33,7 +33,7 @@ Each record uses a short [MADR](https://adr.github.io/madr/)-style template:
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](./0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
-| [0002](./0002-package-manager-pnpm-pinned.md) | Pin the package manager (pnpm 10.x via `packageManager`) | Accepted |
+| [0002](./0002-package-manager-pnpm-pinned.md) | Pin the package manager (pnpm 10.x via `packageManager`) | Superseded by ADR-0028 |
 | [0003](./0003-node-version-pinning.md) | Pin Node.js 24 LTS via `.nvmrc` and `engines` | Accepted |
 | [0004](./0004-biome-for-lint-and-format.md) | Use Biome for linting and formatting | Accepted |
 | [0005](./0005-data-layer-drizzle-neon.md) | Use Drizzle ORM with Neon serverless Postgres | Superseded by ADR-0026 |
@@ -59,3 +59,4 @@ Each record uses a short [MADR](https://adr.github.io/madr/)-style template:
 | [0025](./0025-typescript-7.md) | TypeScript 7 (native compiler) and its tsconfig conventions | Accepted |
 | [0026](./0026-merge-queue-service-architecture.md) | Merge queue as an event-driven Lambda service, not a Next.js app | Accepted |
 | [0027](./0027-wake-ups-and-queue-fan-out.md) | Wake-ups through EventBridge Scheduler; "every base" pokes are only fanned out | Accepted |
+| [0028](./0028-package-manager-pnpm-12.md) | Pin pnpm 12.x via `packageManager` | Proposed |

@@ -1,6 +1,6 @@
 # ADR-0002: Pin the package manager (pnpm 10.x via `packageManager`)
 
-- Status: Accepted
+- Status: Superseded by [ADR-0028](./0028-package-manager-pnpm-12.md)
 - Date: 2026-06-19
 
 ## Context
