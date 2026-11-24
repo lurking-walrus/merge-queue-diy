@@ -9,8 +9,13 @@
 import type { QueueMessage } from "./messages";
 import type { Outcome } from "./reconcile";
 
+/** Written on every reconcile of a base branch that has `strict` on, until it is off. */
+export const STRICT_WARNING =
+	"base branch requires branches to be up to date (strict): enforce mode is paused until it is turned off";
+
 export interface ReconcileLogLine {
-	level: "info";
+	/** `warn` when something needs a human, e.g. `strict` on the base branch. */
+	level: "info" | "warn";
 	msg: "reconcile";
 	repo: string;
 	base: string | null;
@@ -21,6 +26,8 @@ export interface ReconcileLogLine {
 	actions: Record<string, number>;
 	wakeAfterSeconds: number | null;
 	fannedOutTo?: string[];
+	/** A fixed sentence from this file, never data. */
+	warning?: string;
 	durationMs: number;
 }
 
@@ -35,7 +42,7 @@ export function reconcileLogLine(
 	durationMs: number,
 ): ReconcileLogLine {
 	return {
-		level: "info",
+		level: outcome.strictChecks ? "warn" : "info",
 		msg: "reconcile",
 		repo: `${m.owner}/${m.repo}`,
 		base: m.base,
@@ -49,6 +56,7 @@ export function reconcileLogLine(
 		),
 		wakeAfterSeconds: outcome.wakeAfterSeconds ?? null,
 		...(outcome.bases ? { fannedOutTo: outcome.bases } : {}),
+		...(outcome.strictChecks ? { warning: STRICT_WARNING } : {}),
 		durationMs: Math.round(durationMs),
 	};
 }

@@ -50,6 +50,8 @@ export interface QueueRead {
 	baseSha: string;
 	pulls: PullState[];
 	reviewRequirements: ReviewRequirements;
+	/** The base branch requires branches to be up to date (`strict`). */
+	strictChecks: boolean;
 }
 
 export interface QueueStore {

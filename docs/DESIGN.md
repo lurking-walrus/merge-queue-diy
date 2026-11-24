@@ -215,6 +215,15 @@ else can satisfy it, with `strict` off.
   bypass actor for the "require a pull request" rule.
 - A human who must land something by hand uses their existing admin bypass,
   and the queue treats the resulting push like any other move of `main`.
+- `strict` is read on every reconcile from the branch rules
+  (`GET /repos/{o}/{r}/rules/branches/{base}`, which includes organization
+  rulesets). If it is on, enforce mode **pauses**: any batch not yet landing
+  is abandoned, nothing new is built, each wanted PR reports `queue paused: …`,
+  and the reconcile log line is `level: "warn"`. Nothing is stored, so the
+  queue resumes on the first reconcile after `strict` is turned off. Shadow
+  mode only logs the warning, so a repository can be previewed before its
+  ruleset changes. Classic branch protection is not readable with the app's
+  permissions.
 
 This requires rulesets on private repositories, which need a paid plan (Team
 or above). On a Free plan the queue still works, but the gate is a

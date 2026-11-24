@@ -172,10 +172,10 @@ export class RestGitHub implements GitHubPort {
 	async readQueue(config: RepoConfig): Promise<QueueRead> {
 		const baseSha = await this.branchSha(this.baseBranch);
 		if (!baseSha) throw new Error(`base branch ${this.baseBranch} does not exist`);
+		// Read even with review_requirements: none, for `strict`.
+		const rules = await this.readBranchRules();
 		const reviewRequirements =
-			config.reviewRequirements === "none"
-				? NO_REVIEW_REQUIREMENTS
-				: await this.readReviewRequirements();
+			config.reviewRequirements === "none" ? NO_REVIEW_REQUIREMENTS : rules.reviews;
 		const needReviews =
 			reviewRequirements.resolvedConversations || reviewRequirements.approvals > 0;
 		const reviews = needReviews ? await this.readReviewCounts() : new Map<number, ReviewCounts>();
@@ -225,16 +225,17 @@ export class RestGitHub implements GitHubPort {
 				reviews: reviewsOf(p.number),
 			});
 		}
-		return { baseSha, pulls, reviewRequirements };
+		return { baseSha, pulls, reviewRequirements, strictChecks: rules.strict };
 	}
 
 	/**
-	 * The review requirements of the rules that apply to the base branch
-	 * (repository and organization rulesets). Classic branch protection is not
-	 * readable without the Administration permission; set
-	 * `review_requirements` explicitly there. Unreadable rules count as none.
+	 * What the rules that apply to the base branch (repository and
+	 * organization rulesets) require: of reviews, and whether branches must be
+	 * up to date (`strict`). Classic branch protection is not readable without
+	 * the Administration permission; set `review_requirements` explicitly there.
+	 * Unreadable rules count as none.
 	 */
-	private async readReviewRequirements(): Promise<ReviewRequirements> {
+	private async readBranchRules(): Promise<{ reviews: ReviewRequirements; strict: boolean }> {
 		let rules: { type: string; parameters?: unknown }[];
 		try {
 			rules = await this.kit.paginate(this.kit.rest.repos.getBranchRules, {
@@ -243,11 +244,19 @@ export class RestGitHub implements GitHubPort {
 				per_page: 100,
 			});
 		} catch (e) {
-			if (httpStatus(e) === 403 || httpStatus(e) === 404) return NO_REVIEW_REQUIREMENTS;
+			if (httpStatus(e) === 403 || httpStatus(e) === 404) {
+				return { reviews: NO_REVIEW_REQUIREMENTS, strict: false };
+			}
 			throw e;
 		}
 		const out = { ...NO_REVIEW_REQUIREMENTS };
+		let strict = false;
 		for (const rule of rules) {
+			if (rule.type === "required_status_checks") {
+				const p = (rule.parameters ?? {}) as { strict_required_status_checks_policy?: boolean };
+				strict ||= p.strict_required_status_checks_policy === true;
+				continue;
+			}
 			if (rule.type !== "pull_request") continue;
 			const p = (rule.parameters ?? {}) as {
 				required_review_thread_resolution?: boolean;
@@ -256,7 +265,7 @@ export class RestGitHub implements GitHubPort {
 			out.resolvedConversations ||= p.required_review_thread_resolution === true;
 			out.approvals = Math.max(out.approvals, p.required_approving_review_count ?? 0);
 		}
-		return out;
+		return { reviews: out, strict };
 	}
 
 	/**

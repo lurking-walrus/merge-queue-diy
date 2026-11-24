@@ -138,9 +138,12 @@ export function decide(snap: Snapshot): Step {
 		st.batch = null;
 	};
 
-	const active = cfg.mode === "enforce" && st.frozen === null;
+	// `strict` makes GitHub refuse every merge of a batch after the first, so
+	// enforce mode pauses while it is on and resumes by itself once it is off.
+	const pausedByStrict = cfg.mode === "enforce" && snap.strictChecks;
+	const active = cfg.mode === "enforce" && st.frozen === null && !pausedByStrict;
 
-	// Switched to shadow, or frozen, with a batch in flight: stop paying for it.
+	// Switched to shadow, frozen or paused, with a batch in flight: stop paying for it.
 	if (!active && st.batch && st.batch.status !== "landing") abandon(st.batch);
 
 	// --- Advance the batch in flight ---------------------------------------
@@ -262,6 +265,8 @@ export function decide(snap: Snapshot): Step {
 		const position = waitingLine.findIndex((e) => e.number === p.number);
 		if (st.frozen !== null) {
 			if (wanted(p)) report = { state: "waiting", summary: `queue frozen: ${st.frozen}` };
+		} else if (pausedByStrict && !(inBatch.has(p.number) && st.batch?.status === "landing")) {
+			if (wanted(p)) report = { state: "waiting", summary: strictSummary(snap.baseBranch) };
 		} else if (inBatch.has(p.number) && st.batch) {
 			report =
 				st.batch.status === "landing"
@@ -307,6 +312,10 @@ export function decide(snap: Snapshot): Step {
 	}
 
 	return { state: st, actions, wakeAfterSeconds: wake };
+}
+
+export function strictSummary(baseBranch: string): string {
+	return `queue paused: ${baseBranch} requires branches to be up to date before merging (strict); turn that off in its ruleset, the queue tests each batch against the latest ${baseBranch} instead`;
 }
 
 function buildAction(cfg: RepoConfig, baseBranch: string, b: Batch): Action {

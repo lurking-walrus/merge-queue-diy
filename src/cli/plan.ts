@@ -64,6 +64,7 @@ export type PlanResult =
 			baseSha: string;
 			pulls: PullState[];
 			reviewRequirements: ReviewRequirements;
+			strictChecks: boolean;
 			step: Step;
 	  };
 
@@ -76,7 +77,7 @@ export async function plan(o: PlanOptions): Promise<PlanResult> {
 	const config: RepoConfig = o.enforce ? { ...loaded.config, mode: "enforce" } : loaded.config;
 
 	const port = new RestGitHub({ octokit: o.kit, owner: o.owner, repo: o.repo, baseBranch: o.base });
-	const { baseSha, pulls, reviewRequirements } = await port.readQueue(config);
+	const { baseSha, pulls, reviewRequirements, strictChecks } = await port.readQueue(config);
 	const step = decide({
 		now: o.now,
 		config,
@@ -84,10 +85,18 @@ export async function plan(o: PlanOptions): Promise<PlanResult> {
 		baseSha,
 		pulls,
 		reviewRequirements,
+		strictChecks,
 		state: emptyState(),
 		batchChecks: null,
 	});
-	return { config: { kind: "ok", config }, baseSha, pulls, reviewRequirements, step };
+	return {
+		config: { kind: "ok", config },
+		baseSha,
+		pulls,
+		reviewRequirements,
+		strictChecks,
+		step,
+	};
 }
 
 function describe(a: Action): string {
@@ -133,6 +142,9 @@ export function formatPlan(r: PlanResult, o: Pick<PlanOptions, "owner" | "repo" 
 		`${where} at ${r.baseSha.slice(0, 7)} — mode ${c.mode}, enqueue ${c.enqueue}, ${c.mergeMethod}, batch ${c.batchSize}`,
 		`required checks: ${c.requiredChecks.join(", ")}; PR checks: ${c.prChecks.join(", ") || "(none)"}`,
 		`review requirements (${c.reviewRequirements}): ${describeReviews(r.reviewRequirements, c.reviewRequirements)}`,
+		r.strictChecks
+			? `WARNING: ${o.base} requires branches to be up to date (strict). Enforce mode pauses until it is off.`
+			: `branches up to date (strict): not required, as the queue needs`,
 		"",
 		`${r.pulls.length} open pull request(s):`,
 	];

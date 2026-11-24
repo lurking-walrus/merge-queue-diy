@@ -134,6 +134,7 @@ export class FakeGitHub {
 	private readonly workflowRuns: WorkflowRun[] = [];
 	private readonly pendingCi = new Set<string>();
 	private reviewRules: ReviewRequirements = { ...NO_REVIEW_REQUIREMENTS };
+	private strict = false;
 	private ids = 0;
 	private counter = 0;
 
@@ -173,6 +174,11 @@ export class FakeGitHub {
 	}
 
 	/** Served as the base branch's ruleset `pull_request` rule. */
+	/** Turn "require branches to be up to date" (`strict`) on or off for main. */
+	requireUpToDate(on: boolean): void {
+		this.strict = on;
+	}
+
 	requireReviews(r: Partial<ReviewRequirements>): void {
 		this.reviewRules = { ...this.reviewRules, ...r };
 	}
@@ -427,7 +433,19 @@ export class FakeGitHub {
 							},
 						]
 					: [];
-			return page(url, [{ type: "deletion" }, ...rules]);
+			const checks =
+				m?.[1] === "main" && this.strict
+					? [
+							{
+								type: "required_status_checks",
+								parameters: {
+									strict_required_status_checks_policy: true,
+									required_status_checks: [{ context: "ci" }],
+								},
+							},
+						]
+					: [];
+			return page(url, [{ type: "deletion" }, ...rules, ...checks]);
 		}
 		if (method === "GET" && path === "/pulls") {
 			const open = [...this.pulls.values()]

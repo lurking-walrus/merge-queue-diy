@@ -106,6 +106,7 @@ export class SimGitHub implements GitHubPort {
 	private readonly pendingCi = new Set<string>();
 	private counter = 0;
 	private reviewRules: ReviewRequirements = { ...NO_REVIEW_REQUIREMENTS };
+	private strict = false;
 
 	constructor(private readonly opts: { ci?: CiFn; branchPrefix?: string; initial?: Tree } = {}) {
 		this.branches.set("main", this.commit(opts.initial ?? { "README.md": "hello" }, []));
@@ -150,6 +151,11 @@ export class SimGitHub implements GitHubPort {
 	}
 
 	/** What the base branch's rules require of reviews (a ruleset's pull_request rule). */
+	/** Turn "require branches to be up to date" (`strict`) on or off. */
+	requireUpToDate(on: boolean): void {
+		this.strict = on;
+	}
+
 	requireReviews(r: Partial<ReviewRequirements>): void {
 		this.reviewRules = { ...this.reviewRules, ...r };
 	}
@@ -224,7 +230,12 @@ export class SimGitHub implements GitHubPort {
 				},
 			});
 		}
-		return { baseSha, pulls, reviewRequirements: { ...this.reviewRules } };
+		return {
+			baseSha,
+			pulls,
+			reviewRequirements: { ...this.reviewRules },
+			strictChecks: this.strict,
+		};
 	}
 
 	async readChecks(sha: string, names: string[]): Promise<Rollup> {

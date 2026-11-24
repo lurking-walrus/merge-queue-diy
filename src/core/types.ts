@@ -153,6 +153,12 @@ export interface Snapshot {
 	pulls: PullState[];
 	/** What the base branch's rules require of reviews, as GitHub reports them. */
 	reviewRequirements: ReviewRequirements;
+	/**
+	 * The base branch's rules require branches to be up to date before merging
+	 * (`strict`). The queue cannot land under it: every PR after a batch's first
+	 * would be behind. Enforce mode pauses while it is on.
+	 */
+	strictChecks: boolean;
 	state: QueueState;
 	/** Rollup of `config.requiredChecks` on the active batch's commit, when it is testing. */
 	batchChecks: Rollup | null;

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseRepoConfig, type RepoConfig } from "../core/config";
+import { strictSummary } from "../core/decide";
 import type { Action, ReviewRequirements } from "../core/types";
 import { FakeGitHub } from "../github/fake";
 import { adapterFor, interceptGitHub } from "../github/testing";
@@ -29,6 +30,7 @@ interface World {
 	pushToBase(changes: Changes): void;
 	closePull(number: number): void;
 	requireReviews(r: Partial<ReviewRequirements>): void;
+	requireUpToDate(on: boolean): void;
 	openConversation(number: number): void;
 	resolveConversations(number: number): void;
 	approve(number: number, reviewer: string): void;
@@ -283,6 +285,41 @@ describe.each(worlds)("merge queue, end to end against $name", ({ make }) => {
 		expect(sim.lastReport(a)?.summary).toBe("[shadow] waiting: own checks failing (ci)");
 		expect(sim.lastReport(a)?.shadow).toBe(true);
 		expect(sim.pullState(a)).toBe("open");
+	});
+
+	it("pauses while the base branch requires branches to be up to date, then resumes", async () => {
+		const { sim, port, store, cfg } = setup(config());
+		sim.requireUpToDate(true);
+		const a = sim.openPull({ "a.txt": "a" });
+		const b = sim.openPull({ "b.txt": "b" });
+
+		const first = await reconcile(port, store, cfg, sim.now);
+		await drive(sim, port, store, cfg);
+
+		expect(first.strictChecks).toBe(true);
+		expect(sim.batchRuns()).toBe(0);
+		expect(sim.pullState(a)).toBe("open");
+		expect(sim.lastReport(a)?.state).toBe("waiting");
+		expect(sim.lastReport(b)?.summary).toBe(strictSummary("main"));
+
+		sim.requireUpToDate(false);
+		await drive(sim, port, store, cfg);
+
+		expect(sim.pullState(a)).toBe("merged");
+		expect(sim.pullState(b)).toBe("merged");
+		expect(sim.batchRuns()).toBe(1);
+	});
+
+	it("only warns about strict in shadow mode", async () => {
+		const { sim, port, store, cfg } = setup(config({ mode: "shadow" }));
+		sim.requireUpToDate(true);
+		const a = sim.openPull({ "a.txt": "a" });
+
+		await drive(sim, port, store, cfg);
+		const result = await reconcile(port, store, cfg, sim.now);
+
+		expect(result.strictChecks).toBe(true);
+		expect(sim.lastReport(a)?.summary).toBe("[shadow] would be queued (#1 of 1)");
 	});
 
 	it("holds a PR with unresolved conversations when the branch requires them resolved", async () => {
