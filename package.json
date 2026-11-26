@@ -41,7 +41,7 @@
   "pnpm": {
     "overrides": {
       "esbuild": "0.28.1",
-      "vite": "8.0.16"
+      "vite": "8.1.7"
     }
   },
   "description": "A self-hosted GitHub App merge queue for repositories without the native one",
